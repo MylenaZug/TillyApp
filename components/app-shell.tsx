@@ -276,6 +276,12 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   return (
     <div className="relative mx-auto flex h-screen max-w-[430px] flex-col overflow-hidden bg-bg">
+      <span
+        className={`absolute right-3 top-3 z-10 h-2.5 w-2.5 rounded-full ${
+          status === "offline" ? "bg-rust" : status === "pending" ? "bg-amber" : "bg-sage"
+        }`}
+        title={`${userEmail} · ${statusLabel(status, pending)}`}
+      />
       <div className="flex shrink-0 items-center justify-between px-5 pb-3 pt-5">
         <div className="flex items-center gap-2">
           <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border-2 border-gold">
@@ -290,23 +296,13 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           </div>
         </div>
         {view !== "add" && (
-          <div className="flex items-center gap-2">
-            <div className="rounded-full border border-hairline bg-card px-3 py-1.5 text-xs text-ink-soft" title={userEmail}>
-              <span
-                className={`mr-1.5 inline-block h-2 w-2 rounded-full ${
-                  status === "offline" ? "bg-rust" : status === "pending" ? "bg-amber" : "bg-sage"
-                }`}
-              />
-              {statusLabel(status, pending)}
-            </div>
-            <button
-              onClick={() => setView(view === "exercises" ? "home" : "exercises")}
-              className={`flex items-center gap-1.5 rounded-full border border-hairline px-3 py-2 ${view === "exercises" ? "bg-ink" : "bg-card"}`}
-            >
-              <BookOpen size={15} className={view === "exercises" ? "text-white" : "text-ink"} />
-              <span className={`text-xs font-medium ${view === "exercises" ? "text-white" : "text-ink"}`}>Übungen</span>
-            </button>
-          </div>
+          <button
+            onClick={() => setView(view === "exercises" ? "home" : "exercises")}
+            className={`flex items-center gap-2 rounded-full border border-hairline px-4 py-3 ${view === "exercises" ? "bg-ink" : "bg-card"}`}
+          >
+            <BookOpen size={20} className={view === "exercises" ? "text-white" : "text-ink"} />
+            <span className={`text-sm font-medium ${view === "exercises" ? "text-white" : "text-ink"}`}>Übungen</span>
+          </button>
         )}
       </div>
 

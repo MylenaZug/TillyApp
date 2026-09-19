@@ -23,8 +23,10 @@ export type StarIcon = ComponentType<StarIconProps>;
 
 export function SharkTooth({ size = 22, fill }: StarIconProps) {
   const filled = !!fill && fill !== "transparent";
+  // Emoji-Glyphen wirken bei gleicher font-size optisch kleiner als Lucide-Icons - Faktor gleicht das an.
+  const emojiSize = typeof size === "number" ? size * 1.25 : size;
   return (
-    <span style={{ fontSize: size, lineHeight: 1, opacity: filled ? 1 : 0.25, filter: filled ? "none" : "grayscale(1)" }} aria-hidden>
+    <span style={{ fontSize: emojiSize, lineHeight: 1, opacity: filled ? 1 : 0.25, filter: filled ? "none" : "grayscale(1)" }} aria-hidden>
       🦈
     </span>
   );
@@ -42,7 +44,7 @@ export function PawTrailLoader() {
 }
 
 function StarMark({ icon: Icon = PawPrint, colorClass, filled }: { icon?: StarIcon; colorClass: string; filled: boolean }) {
-  return <Icon size={22} className={colorClass} fill={filled ? "currentColor" : "transparent"} strokeWidth={1.75} />;
+  return <Icon size={26} className={colorClass} fill={filled ? "currentColor" : "transparent"} strokeWidth={1.75} />;
 }
 
 // StarRow: fuer Formulare gedacht (kein Screenreader-Radiogroup, dafuer togglebar per
@@ -63,13 +65,13 @@ export function StarRow({
   return (
     <div className="flex items-center justify-between py-1.5">
       <span className="text-sm text-ink-soft">{label}</span>
-      <div className="flex gap-1">
+      <div className="flex">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
             type="button"
             onClick={() => onChange(n === value ? 0 : n)}
-            className="p-0.5 transition-transform active:scale-90"
+            className="flex h-9 w-9 items-center justify-center transition-transform active:scale-90"
             aria-label={`${n} Sterne`}
           >
             <StarMark icon={icon} colorClass={colorClass} filled={n <= value} />
@@ -98,12 +100,12 @@ export function Rating({
   return (
     <div className="flex items-center justify-between py-1.5">
       <span className="text-sm text-ink-soft">{label}</span>
-      <div className="flex gap-1" role="radiogroup" aria-label={label}>
+      <div className="flex" role="radiogroup" aria-label={label}>
         {[1, 2, 3, 4, 5].map((score) => (
           <button
             key={score}
             onClick={() => onChange(score === value ? 0 : score)}
-            className="p-0.5 transition-transform active:scale-90"
+            className="flex h-9 w-9 items-center justify-center transition-transform active:scale-90"
             aria-label={`${label}: ${score}`}
             aria-pressed={score <= value}
           >

@@ -60,15 +60,15 @@ export function HomeView({
         <Rating label="Sharklevel" value={energie} onChange={onUpdateEnergie} icon={SharkTooth} colorClass="text-amber" />
       </div>
 
-      <div className="mb-6 grid grid-cols-4 gap-2">
+      <div className="mb-6 grid grid-cols-4 gap-2.5">
         {ADDABLE_CATEGORIES.map((c) => (
           <button
             key={c.id}
             onClick={() => onOpenAdd(c.id)}
-            className="flex flex-col items-center gap-1 rounded-xl border border-hairline bg-card py-2.5 transition-transform active:scale-[0.95]"
+            className="flex flex-col items-center gap-1.5 rounded-xl border border-hairline bg-card py-4 transition-transform active:scale-[0.95]"
           >
-            <CatIcon cat={c} size={16} />
-            <span className="text-center text-[10px] font-medium leading-tight text-ink">{c.label}</span>
+            <CatIcon cat={c} size={22} />
+            <span className="text-center text-xs font-medium leading-tight text-ink">{c.label}</span>
           </button>
         ))}
       </div>
