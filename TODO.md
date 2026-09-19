@@ -66,6 +66,10 @@ einem lokal gebundenen Node-Prozess laufen. Deployment ist zunächst manuell per
    - Drizzle-Migration aus `db/schema.ts` erzeugen (`npm run db:generate`).
    - Migration lokal ausführen (`npm run db:migrate`).
    - Sicherstellen, dass `DB_PATH` aus `.env.local` verwendet wird und nicht eingecheckt wird.
+   - Standardübungen einmalig einspielen: `npm run db:seed` (befüllt `kv_store`/`exercises`,
+     überspringt sich selbst, falls der Key schon existiert). Ersetzt den früheren
+     Runtime-Merge im Client (`DEFAULT_EXERCISES` gibt es nicht mehr als Konstante, siehe
+     `db/seed-data.ts`).
 
 3. **Auth lokal testbar machen**
    - Google OAuth-Client im bestehenden GCP-Projekt (unter dem bisherigen Firebase-Projekt)
