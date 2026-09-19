@@ -1,10 +1,13 @@
 "use client";
 
-import { Battery, Heart, RotateCcw, StickyNote, Zap } from "lucide-react";
+import { Heart, RotateCcw, StickyNote, Zap } from "lucide-react";
 import { ADDABLE_CATEGORIES } from "@/lib/tilly/constants";
 import { daysAgo, stressLabelFor } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId } from "@/lib/tilly/types";
-import { CatIcon, Rating, SharkTooth, TextArea } from "./ui";
+import { CatIcon, Rating, TextArea } from "./ui";
+
+const PATIENCE_ICON = { filled: "/icons/tilly/rating-patience-filled.png", empty: "/icons/tilly/rating-patience-empty.png" };
+const SHARK_ICON = { filled: "/icons/tilly/rating-shark-filled.png", empty: "/icons/tilly/rating-shark-empty.png" };
 
 export function HomeView({
   entries,
@@ -55,9 +58,9 @@ export function HomeView({
         </div>
         <Rating label="Folgsamkeit" value={folgsamkeit} onChange={onUpdateFolgsamkeit} colorClass="text-gold" />
         <div className="h-px bg-hairline" />
-        <Rating label="Meine Geduld" value={patience} onChange={onUpdatePatience} icon={Battery} colorClass="text-rose" />
+        <Rating label="Meine Geduld" value={patience} onChange={onUpdatePatience} icon={PATIENCE_ICON} colorClass="text-rose" />
         <div className="h-px bg-hairline" />
-        <Rating label="Sharklevel" value={energie} onChange={onUpdateEnergie} icon={SharkTooth} colorClass="text-amber" />
+        <Rating label="Sharklevel" value={energie} onChange={onUpdateEnergie} icon={SHARK_ICON} colorClass="text-amber" />
       </div>
 
       <div className="mb-6 grid grid-cols-4 gap-2.5">

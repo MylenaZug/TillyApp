@@ -1,15 +1,3 @@
-import {
-  AlertTriangle,
-  Euro,
-  Heart,
-  Scale,
-  Stethoscope,
-  Target,
-  UtensilsCrossed,
-  Waves,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
 import type { CategoryId } from "./types";
 
 // Tailwind-Klassen + Hex-Werte muessen mit tailwind.config.ts uebereinstimmen
@@ -17,8 +5,7 @@ import type { CategoryId } from "./types";
 export type CategoryMeta = {
   id: CategoryId;
   label: string;
-  icon: LucideIcon;
-  emoji?: string;
+  icon: string;
   text: string;
   bg: string;
   border: string;
@@ -27,16 +14,18 @@ export type CategoryMeta = {
   hexSoft: string;
 };
 
+const ICON = (name: string) => `/icons/tilly/${name}.png`;
+
 export const CATEGORIES: CategoryMeta[] = [
-  { id: "food", label: "Futter", icon: UtensilsCrossed, emoji: "🦴", text: "text-sage", bg: "bg-sage", border: "border-sage", soft: "bg-sage-soft", hex: "#0E7C86", hexSoft: "#D8EAEA" },
-  { id: "stool", label: "Stuhlgang", icon: Waves, emoji: "💩", text: "text-rust", bg: "bg-rust", border: "border-rust", soft: "bg-rust-soft", hex: "#C0392B", hexSoft: "#F5DAD6" },
-  { id: "training", label: "Training", icon: Target, emoji: "🎾", text: "text-gold", bg: "bg-gold", border: "border-gold", soft: "bg-gold-soft", hex: "#2E8B57", hexSoft: "#DCEEE2" },
-  { id: "stress", label: "Stress", icon: Zap, text: "text-amber", bg: "bg-amber", border: "border-amber", soft: "bg-amber-soft", hex: "#3457D5", hexSoft: "#DCE3F8" },
-  { id: "symptom", label: "Auffälligkeit", icon: AlertTriangle, text: "text-berry", bg: "bg-berry", border: "border-berry", soft: "bg-berry-soft", hex: "#E6B800", hexSoft: "#FBF0C9" },
-  { id: "weight", label: "Gewicht", icon: Scale, text: "text-teal", bg: "bg-teal", border: "border-teal", soft: "bg-teal-soft", hex: "#B8860B", hexSoft: "#F3E7C9" },
-  { id: "vet", label: "Tierarzt", icon: Stethoscope, text: "text-plum", bg: "bg-plum", border: "border-plum", soft: "bg-plum-soft", hex: "#7A5C8E", hexSoft: "#EAE3F0" },
-  { id: "kosten", label: "Kosten", icon: Euro, text: "text-slate", bg: "bg-slate", border: "border-slate", soft: "bg-slate-soft", hex: "#546A7B", hexSoft: "#DCE4E8" },
-  { id: "tagescheck", label: "Tagescheck", icon: Heart, text: "text-rose", bg: "bg-rose", border: "border-rose", soft: "bg-rose-soft", hex: "#B5537A", hexSoft: "#F3DCE6" },
+  { id: "food", label: "Futter", icon: ICON("category-food"), text: "text-sage", bg: "bg-sage", border: "border-sage", soft: "bg-sage-soft", hex: "#0E7C86", hexSoft: "#D8EAEA" },
+  { id: "stool", label: "Stuhlgang", icon: ICON("category-stool"), text: "text-rust", bg: "bg-rust", border: "border-rust", soft: "bg-rust-soft", hex: "#C0392B", hexSoft: "#F5DAD6" },
+  { id: "training", label: "Training", icon: ICON("category-training"), text: "text-gold", bg: "bg-gold", border: "border-gold", soft: "bg-gold-soft", hex: "#2E8B57", hexSoft: "#DCEEE2" },
+  { id: "stress", label: "Stress", icon: ICON("category-stress"), text: "text-amber", bg: "bg-amber", border: "border-amber", soft: "bg-amber-soft", hex: "#3457D5", hexSoft: "#DCE3F8" },
+  { id: "symptom", label: "Auffälligkeit", icon: ICON("category-symptom"), text: "text-berry", bg: "bg-berry", border: "border-berry", soft: "bg-berry-soft", hex: "#E6B800", hexSoft: "#FBF0C9" },
+  { id: "weight", label: "Gewicht", icon: ICON("category-weight"), text: "text-teal", bg: "bg-teal", border: "border-teal", soft: "bg-teal-soft", hex: "#B8860B", hexSoft: "#F3E7C9" },
+  { id: "vet", label: "Tierarzt", icon: ICON("category-vet"), text: "text-plum", bg: "bg-plum", border: "border-plum", soft: "bg-plum-soft", hex: "#7A5C8E", hexSoft: "#EAE3F0" },
+  { id: "kosten", label: "Kosten", icon: ICON("category-kosten"), text: "text-slate", bg: "bg-slate", border: "border-slate", soft: "bg-slate-soft", hex: "#546A7B", hexSoft: "#DCE4E8" },
+  { id: "tagescheck", label: "Tagescheck", icon: ICON("extra-health"), text: "text-rose", bg: "bg-rose", border: "border-rose", soft: "bg-rose-soft", hex: "#B5537A", hexSoft: "#F3DCE6" },
 ];
 
 // Tagescheck wird ausschliesslich ueber die "Heute"-Karte gepflegt, taucht daher nicht

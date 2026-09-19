@@ -15,7 +15,9 @@ import {
 } from "@/lib/tilly/constants";
 import { dateOnlyToISO, nowLocalISO, toLocalDateValue, toLocalInputValue } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, Exercise } from "@/lib/tilly/types";
-import { CatIcon, Chip, FieldLabel, PrimaryButton, SharkTooth, StarRow, TextArea, TextInput } from "./ui";
+import { CatIcon, Chip, FieldLabel, PrimaryButton, StarRow, TextArea, TextInput } from "./ui";
+
+const SHARK_ICON = { filled: "/icons/tilly/rating-shark-filled.png", empty: "/icons/tilly/rating-shark-empty.png" };
 
 export function EntryForm({
   categoryId,
@@ -328,7 +330,7 @@ export function EntryForm({
           <div className="rounded-xl border border-hairline bg-bg px-3 py-1">
             <StarRow label="Folgsamkeit" value={folgsamkeit} onChange={setFolgsamkeit} colorClass="text-gold" />
             <div className="h-px bg-hairline" />
-            <StarRow label="Sharklevel" value={energie} onChange={setEnergie} colorClass="text-amber" icon={SharkTooth} />
+            <StarRow label="Sharklevel" value={energie} onChange={setEnergie} colorClass="text-amber" icon={SHARK_ICON} />
           </div>
         )}
 

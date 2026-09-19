@@ -1,50 +1,42 @@
 "use client";
 
-import type { ComponentType, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
-import { PawPrint } from "lucide-react";
+import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
 import type { CategoryMeta } from "@/lib/tilly/constants";
 
 export function CatIcon({ cat, size = 16 }: { cat: CategoryMeta; size?: number }) {
-  if (cat.emoji) {
-    return (
-      <span style={{ fontSize: size, lineHeight: 1 }} aria-hidden>
-        {cat.emoji}
-      </span>
-    );
-  }
-  const Icon = cat.icon;
-  return <Icon size={size} className={cat.text} />;
+  return <img src={cat.icon} width={size} height={size} alt="" draggable={false} className="object-contain" />;
 }
 
-// Gemeinsame Props-Form fuer alles, was als "Sterne"-Icon in StarRow/Rating durchgereicht
-// werden kann - sowohl echte Lucide-Icons als auch SharkTooth (Emoji statt SVG).
-export type StarIconProps = { size?: number | string; className?: string; fill?: string; strokeWidth?: number | string };
-export type StarIcon = ComponentType<StarIconProps>;
+// Bildpaar (gefuellt/leer) fuer die "Sterne"-artigen Bewertungszeilen in StarRow/Rating -
+// stammt aus dem handgezeichneten Icon-Set in public/icons/tilly.
+export type StarIconSrc = { filled: string; empty: string };
 
-export function SharkTooth({ size = 22, fill }: StarIconProps) {
-  const filled = !!fill && fill !== "transparent";
-  // Emoji-Glyphen wirken bei gleicher font-size optisch kleiner als Lucide-Icons - Faktor gleicht das an.
-  const emojiSize = typeof size === "number" ? size * 1.25 : size;
-  return (
-    <span style={{ fontSize: emojiSize, lineHeight: 1, opacity: filled ? 1 : 0.25, filter: filled ? "none" : "grayscale(1)" }} aria-hidden>
-      🦈
-    </span>
-  );
-}
+const DEFAULT_STAR_ICON: StarIconSrc = {
+  filled: "/icons/tilly/rating-paw-filled.png",
+  empty: "/icons/tilly/rating-paw-empty.png",
+};
 
 export function PawTrailLoader() {
   return (
-    <div className="flex h-full items-center justify-center gap-2 text-gold">
+    <div className="flex h-full items-center justify-center gap-2">
       {[0, 1, 2, 3].map((i) => (
-        <PawPrint key={i} size={20} style={{ opacity: 0.3, animation: `tillyPawFade 1.1s ${i * 0.15}s infinite ease-in-out` }} />
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={i}
+          src={DEFAULT_STAR_ICON.filled}
+          alt=""
+          width={20}
+          height={20}
+          style={{ opacity: 0.3, animation: `tillyPawFade 1.1s ${i * 0.15}s infinite ease-in-out` }}
+        />
       ))}
       <style>{`@keyframes tillyPawFade{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}`}</style>
     </div>
   );
 }
 
-function StarMark({ icon: Icon = PawPrint, colorClass, filled }: { icon?: StarIcon; colorClass: string; filled: boolean }) {
-  return <Icon size={26} className={colorClass} fill={filled ? "currentColor" : "transparent"} strokeWidth={1.75} />;
+function StarMark({ icon = DEFAULT_STAR_ICON, filled }: { icon?: StarIconSrc; colorClass?: string; filled: boolean }) {
+  return <img src={filled ? icon.filled : icon.empty} width={26} height={26} alt="" draggable={false} className="object-contain" />;
 }
 
 // StarRow: fuer Formulare gedacht (kein Screenreader-Radiogroup, dafuer togglebar per
@@ -60,7 +52,7 @@ export function StarRow({
   onChange: (value: number) => void;
   label: string;
   colorClass?: string;
-  icon?: StarIcon;
+  icon?: StarIconSrc;
 }) {
   return (
     <div className="flex items-center justify-between py-1.5">
@@ -95,7 +87,7 @@ export function Rating({
   value: number;
   onChange: (value: number) => void;
   colorClass?: string;
-  icon?: StarIcon;
+  icon?: StarIconSrc;
 }) {
   return (
     <div className="flex items-center justify-between py-1.5">
