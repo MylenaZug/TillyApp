@@ -12,3 +12,10 @@ drizzle/
 .env.production
 next-env.d.ts
 tsconfig.tsbuildinfo
+
+# von @ducanh2912/next-pwa bei jedem Build/Dev-Start neu nach public/ generiert
+/public/sw.js
+/public/swe-worker-development.js
+/public/workbox-*.js
+
+.DS_Store
