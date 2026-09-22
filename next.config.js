@@ -13,7 +13,7 @@ export default withPWA({
   workboxOptions: {
     runtimeCaching: [
       {
-        urlPattern: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith("/api/"),
+        urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
         handler: "NetworkOnly",
       },
       ...runtimeCaching.filter((entry) => entry.options?.cacheName !== "apis"),

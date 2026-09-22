@@ -12,7 +12,7 @@ export function useSyncStatus(userEmail: string): { status: SyncStatus; pending:
 
   useEffect(() => {
     const refreshStatus = () =>
-      void Promise.all([getPendingCount(userEmail), getLastSyncedAt()]).then(([nextPending, nextLastSyncedAt]) => {
+      void Promise.all([getPendingCount(userEmail), getLastSyncedAt(userEmail)]).then(([nextPending, nextLastSyncedAt]) => {
         setPending(nextPending);
         setLastSyncedAt(nextLastSyncedAt);
       });

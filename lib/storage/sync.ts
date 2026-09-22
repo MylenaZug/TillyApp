@@ -45,7 +45,12 @@ async function pullChanges() {
   for (const row of data.entries) await localDb.putEntry(row);
   for (const row of data.dailyPatience) await localDb.putPatience(row);
 
-  await localDb.setMeta({ lastSyncedAt: data.serverTime });
+  await localDb.setMeta({
+    lastSyncedAt: data.serverTime,
+    lastSyncedAtByUser: activeUserEmail
+      ? { ...meta.lastSyncedAtByUser, [activeUserEmail]: data.serverTime }
+      : meta.lastSyncedAtByUser,
+  });
 }
 
 let syncing = false;

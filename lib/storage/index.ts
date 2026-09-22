@@ -89,6 +89,7 @@ export async function getPendingCount(userEmail?: string | null): Promise<number
   return q.kv.length + q.entries.length + q.dailyPatience.length;
 }
 
-export async function getLastSyncedAt(): Promise<number> {
-  return (await localDb.getMeta()).lastSyncedAt;
+export async function getLastSyncedAt(userEmail?: string): Promise<number> {
+  const meta = await localDb.getMeta();
+  return userEmail ? meta.lastSyncedAtByUser[userEmail] ?? 0 : meta.lastSyncedAt;
 }

@@ -3,7 +3,7 @@
 import { clear, createStore, del, entries, get, set } from "idb-keyval";
 import type { EntryRecord, KvMutation, PatienceRecord, PendingQueue } from "./types";
 
-type Meta = { lastSyncedAt: number };
+type Meta = { lastSyncedAt: number; lastSyncedAtByUser: Record<string, number> };
 
 const KV_STORE = createStore("tilly-tracker-kv", "keyval");
 const ENTRIES_STORE = createStore("tilly-tracker-entries", "keyval");
@@ -140,7 +140,7 @@ export const localDb = {
   },
 
   async getMeta(): Promise<Meta> {
-    return (await get<Meta>(META_KEY, META_STORE)) || { lastSyncedAt: 0 };
+    return (await get<Meta>(META_KEY, META_STORE)) || { lastSyncedAt: 0, lastSyncedAtByUser: {} };
   },
   async setMeta(meta: Meta) {
     await set(META_KEY, meta, META_STORE);
