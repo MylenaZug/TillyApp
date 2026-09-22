@@ -107,7 +107,7 @@ export function toLocalDateValue(iso: string) {
 
 export function dateOnlyToISO(value: string) {
   const [year, month, day] = value.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0)).toISOString();
+  return new Date(year, month - 1, day, 12, 0, 0).toISOString();
 }
 
 export function dateKey(d: Date | string) {
@@ -131,9 +131,13 @@ export function entrySummary(entry: AnyEntry): string {
         return `${entry.kg} kg${entry.daytime ? " · " + entry.daytime : ""}`;
       case "food":
         if (!entry.food) return "Eintrag gespeichert";
-        return `${entry.food}${entry.amount ? " · " + entry.amount + " g" : ""}`;
+        return `${entry.food}${entry.amount ? " · " + entry.amount + " g" : ""}${
+          entry.cost !== undefined && !Number.isNaN(Number(entry.cost)) ? " · " + Number(entry.cost).toFixed(2) + " €" : ""
+        }`;
       case "vet":
-        return `${entry.reason || "Termin"}`;
+        return `${entry.reason || "Termin"}${
+          entry.cost !== undefined && !Number.isNaN(Number(entry.cost)) ? " · " + Number(entry.cost).toFixed(2) + " €" : ""
+        }`;
       case "symptom":
         if (!entry.category) return "Eintrag gespeichert";
         return entry.category;

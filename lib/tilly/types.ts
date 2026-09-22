@@ -19,8 +19,8 @@ export type StoolData = BaseEntryData & {
 };
 export type TrainingData = BaseEntryData & { activity: string; dogStars: number; trainerStars: number };
 export type WeightData = BaseEntryData & { kg: number; daytime: string };
-export type FoodData = BaseEntryData & { food: string; amount?: number };
-export type VetData = BaseEntryData & { reason: string };
+export type FoodData = BaseEntryData & { food: string; amount?: number; cost?: number };
+export type VetData = BaseEntryData & { reason: string; cost?: number };
 export type SymptomData = BaseEntryData & { category: string };
 export type StressData = BaseEntryData & { level: number };
 export type KostenData = BaseEntryData & { category: string; amount: number };
