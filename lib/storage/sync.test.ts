@@ -2,7 +2,7 @@
 // gestuetzte) lokale Queue, aber mit gemocktem fetch statt echtem Server.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { localDb } from "@/lib/storage/local-db";
-import { runSync, setSyncUser } from "@/lib/storage/sync";
+import { runSync, setSyncUser, setupAutoSync } from "@/lib/storage/sync";
 
 beforeEach(async () => {
   await localDb.clearAll();
@@ -147,5 +147,30 @@ describe("runSync", () => {
       entries: [],
       dailyPatience: [],
     });
+  });
+
+  it("initialisiert den Auto-Sync bei mehreren Nutzern des Hooks nur einmal", async () => {
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+    const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ serverTime: 0, kv: [], entries: [], dailyPatience: [] }),
+      } as unknown as Response)
+    );
+
+    const stopA = setupAutoSync();
+    const stopB = setupAutoSync();
+
+    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+
+    stopA();
+    expect(clearIntervalSpy).not.toHaveBeenCalled();
+
+    stopB();
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 });
