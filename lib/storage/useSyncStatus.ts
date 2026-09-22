@@ -36,7 +36,6 @@ export function useSyncStatus(userEmail: string): { status: SyncStatus; pending:
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       stopAutoSync();
-      setSyncUser(null);
     };
   }, [userEmail]);
 
