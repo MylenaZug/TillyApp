@@ -106,7 +106,8 @@ export function toLocalDateValue(iso: string) {
 }
 
 export function dateOnlyToISO(value: string) {
-  return new Date(`${value}T12:00:00`).toISOString();
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0)).toISOString();
 }
 
 export function dateKey(d: Date | string) {

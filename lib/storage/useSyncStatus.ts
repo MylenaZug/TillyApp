@@ -11,6 +11,10 @@ export function useSyncStatus(userEmail: string): { status: SyncStatus; pending:
   const [lastSyncedAt, setLastSyncedAt] = useState(0);
 
   useEffect(() => {
+    setPending(0);
+    setLastSyncedAt(0);
+    setOnline(navigator.onLine);
+
     const refreshStatus = () =>
       void Promise.all([getPendingCount(userEmail), getLastSyncedAt(userEmail)]).then(([nextPending, nextLastSyncedAt]) => {
         setPending(nextPending);
@@ -21,7 +25,6 @@ export function useSyncStatus(userEmail: string): { status: SyncStatus; pending:
     const handleOnline = () => setOnline(true);
     const handleOffline = () => setOnline(false);
 
-    setOnline(navigator.onLine);
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
