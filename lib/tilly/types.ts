@@ -12,7 +12,7 @@ export type CategoryId =
 type BaseEntryData = { date: string; note?: string };
 
 export type StoolData = BaseEntryData & {
-  consistency: string;
+  consistency: string[];
   stoolAmount: string;
   color: string;
   flags: string[];

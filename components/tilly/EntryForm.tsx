@@ -49,7 +49,10 @@ export function EntryForm({
   const meta = catMeta(categoryId);
   const [date, setDate] = useState(existing ? existing.date : nowLocalISO());
 
-  const [consistency, setConsistency] = useState(existing?.consistency || STOOL_CONSISTENCY[0]);
+  const existingConsistency = existing?.consistency as unknown as string | string[] | undefined;
+  const [consistency, setConsistency] = useState<string[]>(
+    existingConsistency ? (Array.isArray(existingConsistency) ? existingConsistency : [existingConsistency]) : [STOOL_CONSISTENCY[0]],
+  );
   const [stoolAmount, setStoolAmount] = useState(existing?.stoolAmount || STOOL_AMOUNTS[1]);
   const [color, setColor] = useState(existing?.color || STOOL_COLORS[0].label);
   const [flags, setFlags] = useState<string[]>(existing?.flags || []);
@@ -86,7 +89,7 @@ export function EntryForm({
   const [note, setNote] = useState(existing?.note || "");
 
   const canSave =
-    categoryId === "stool" ||
+    (categoryId === "stool" && consistency.length > 0) ||
     (categoryId === "training" && activity.trim().length > 0) ||
     (categoryId === "weight" && kg.trim().length > 0 && !Number.isNaN(Number(kg))) ||
     (categoryId === "food" && food.trim().length > 0) ||
@@ -113,6 +116,8 @@ export function EntryForm({
   };
 
   const toggleFlag = (f: string) => setFlags((cur) => (cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]));
+  const toggleConsistency = (c: string) =>
+    setConsistency((cur) => (cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c]));
 
   return (
     <div className="pb-4">
@@ -142,7 +147,7 @@ export function EntryForm({
               <FieldLabel>Konsistenz</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {STOOL_CONSISTENCY.map((c) => (
-                  <Chip key={c} active={consistency === c} onClick={() => setConsistency(c)} colorClass={meta.text} activeBgClass={meta.bg}>
+                  <Chip key={c} active={consistency.includes(c)} onClick={() => toggleConsistency(c)} colorClass={meta.text} activeBgClass={meta.bg}>
                     {c}
                   </Chip>
                 ))}

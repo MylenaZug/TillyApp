@@ -111,7 +111,7 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
 
   const consistencyCounts = STOOL_CONSISTENCY.map((c) => ({
     label: c,
-    count: stoolEntries.filter((e) => e.consistency === c).length,
+    count: stoolEntries.filter((e) => (Array.isArray(e.consistency) ? e.consistency : e.consistency ? [e.consistency] : []).includes(c)).length,
   }));
   const flagCounts = STOOL_FLAGS.map((f) => ({
     label: f,
