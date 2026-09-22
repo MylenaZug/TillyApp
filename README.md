@@ -42,15 +42,22 @@ die Build-Tools mit, die `better-sqlite3` zum Kompilieren braucht. Beim ersten S
 `.devcontainer/setup.sh` automatisch `.env` (inkl. generiertem `AUTH_SECRET`) ein.
 
 ```bash
-npm install
-
-# Datenbankschema anwenden und Übungsbibliothek einmalig befüllen
+# Beim ersten Start: Migration aus dem aktuellen Schema erzeugen und anwenden
 npm run db:generate
 npm run db:migrate
+
+# Übungsbibliothek einmalig befüllen (idempotent)
 npm run db:seed
 
 npm run dev
 ```
+
+Beim Erstellen oder erneuten Öffnen des Dev Containers führt
+`.devcontainer/setup.sh` automatisch `npm install` aus und legt bei Bedarf `.env`
+mit einem generierten `AUTH_SECRET` an. Die Datenbankbefehle werden absichtlich
+nicht automatisch ausgeführt: `db:generate` ist eine Entwickleraktion bei
+Schemaänderungen, während `db:migrate` und `db:seed` nach dem ersten Setup oder
+bei Bedarf manuell ausgeführt werden.
 
 Benötigte Umgebungsvariablen siehe `.env.example`. Ohne echte `GOOGLE_CLIENT_ID`/`SECRET`
 funktioniert lokal trotzdem alles über den automatischen Dev-Login (`DEV_USER_EMAIL`).
