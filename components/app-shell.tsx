@@ -6,13 +6,17 @@ import {
   deleteEntry,
   getKv,
   getPatience,
+  listPatience,
   listEntries,
+  onStorageChange,
   saveEntry,
+  setSyncUser,
   setKv,
   setMyPatience,
+  setupAutoSync,
 } from "@/lib/storage";
 import { useSyncStatus, type SyncStatus } from "@/lib/storage/useSyncStatus";
-import type { EntryRecord } from "@/lib/storage/types";
+import type { EntryRecord, PatienceRecord } from "@/lib/storage/types";
 import { ADDABLE_CATEGORIES, SYMPTOM_CATEGORIES, catMeta } from "@/lib/tilly/constants";
 import { daysAgo, dateKey, nowLocalISO, tillyAge } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, Exercise } from "@/lib/tilly/types";
@@ -25,10 +29,20 @@ import { EntryForm } from "@/components/tilly/EntryForm";
 
 const DEFAULT_TRAINING_TYPES = ["Sitz", "Leinenführigkeit", "Rückruf"];
 
-function statusLabel(status: SyncStatus, pending: number) {
+function formatElapsed(lastSyncedAt: number, nowTs: number) {
+  const diffSeconds = Math.max(0, Math.floor((nowTs - lastSyncedAt) / 1000));
+  if (diffSeconds < 60) return `vor ${diffSeconds} Sek.`;
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `vor ${diffMinutes} Min.`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `vor ${diffHours} Std.`;
+  return `vor ${Math.floor(diffHours / 24)} Tg.`;
+}
+
+function statusLabel(status: SyncStatus, pending: number, lastSyncedAt: number, nowTs: number) {
   if (status === "offline") return "Offline";
   if (status === "pending") return `${pending} ausstehend`;
-  return "Synchronisiert";
+  return lastSyncedAt > 0 ? `Synchronisiert ${formatElapsed(lastSyncedAt, nowTs)}` : "Synchronisiert";
 }
 
 function parseEntryRecord(record: EntryRecord): AnyEntry {
@@ -80,6 +94,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const [foodPlanStatus, setFoodPlanStatus] = useState("");
   const foodPlanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [patience, setPatience] = useState(0);
+  const [otherPatience, setOtherPatience] = useState<PatienceRecord[]>([]);
 
   const [view, setView] = useState<View>("home");
   const [addCategory, setAddCategory] = useState<CategoryId | null>(null);
@@ -89,8 +104,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const [historyFilter, setHistoryFilter] = useState<CategoryId | "all">("all");
   const [toast, setToast] = useState("");
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [nowTs, setNowTs] = useState(() => Date.now());
 
-  const { status, pending } = useSyncStatus();
+  const { status, pending, lastSyncedAt } = useSyncStatus(userEmail);
 
   async function refresh() {
     const records = await listEntries();
@@ -98,7 +114,20 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     setEntries(parsed);
   }
 
+  async function refreshPatience() {
+    const today = dateKey(new Date());
+    const [myPatience, allPatience] = await Promise.all([getPatience(userEmail, today), listPatience(today)]);
+    setPatience(myPatience);
+    setOtherPatience(
+      allPatience
+        .filter((row) => row.userEmail !== userEmail)
+        .sort((a, b) => a.userEmail.localeCompare(b.userEmail))
+    );
+  }
+
   useEffect(() => {
+    setSyncUser(userEmail);
+    const stopAutoSync = setupAutoSync();
     (async () => {
       try {
         const [t, f, s, ex, gn, fp] = await Promise.all([
@@ -118,11 +147,21 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         // kv_store - hier nur noch laden, kein Runtime-Merge/Seed im Client mehr noetig.
         if (ex) setExercises(JSON.parse(ex));
 
-        await Promise.all([refresh(), getPatience(userEmail, dateKey(new Date())).then(setPatience)]);
+        await Promise.all([refresh(), refreshPatience()]);
       } finally {
         setReady(true);
       }
     })();
+    const unsubscribe = onStorageChange(() => {
+      void Promise.all([refresh(), refreshPatience()]);
+    });
+    const interval = window.setInterval(() => setNowTs(Date.now()), 1000);
+
+    return () => {
+      unsubscribe();
+      stopAutoSync();
+      window.clearInterval(interval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail]);
 
@@ -197,6 +236,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     setPatience(value);
     await setMyPatience(userEmail, dateKey(new Date()), value);
   }
+
+  const syncStatusText = statusLabel(status, pending, lastSyncedAt, nowTs);
 
   function handleNoteChange(text: string) {
     setGeneralNote(text);
@@ -276,12 +317,13 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   return (
     <div className="relative mx-auto flex h-screen max-w-[430px] flex-col overflow-hidden bg-bg">
-      <span
-        className={`absolute right-3 top-3 z-10 h-2.5 w-2.5 rounded-full ${
-          status === "offline" ? "bg-rust" : status === "pending" ? "bg-amber" : "bg-sage"
-        }`}
-        title={`${userEmail} · ${statusLabel(status, pending)}`}
-      />
+      <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-card/90 px-2 py-1 shadow-sm" title={`${userEmail} · ${syncStatusText}`}>
+        <span
+          aria-hidden="true"
+          className={`h-2.5 w-2.5 rounded-full ${status === "offline" ? "bg-rust" : status === "pending" ? "bg-amber" : "bg-sage"}`}
+        />
+        <span className="text-[11px] text-ink-soft">{syncStatusText}</span>
+      </div>
       <div className="flex shrink-0 items-center justify-between px-5 pb-3 pt-5">
         <div className="flex items-center gap-2">
           <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border-2 border-gold">
@@ -314,6 +356,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             folgsamkeit={todayCheck?.folgsamkeit || 0}
             energie={todayCheck?.energie || 0}
             patience={patience}
+            otherPatience={otherPatience}
             onUpdateFolgsamkeit={(v) => void updateTodayCheck("folgsamkeit", v)}
             onUpdateEnergie={(v) => void updateTodayCheck("energie", v)}
             onUpdatePatience={(v) => void updatePatience(v)}
@@ -406,7 +449,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             <p className="mb-5 text-sm text-ink-soft">
               Alle Einträge (Futter, Stuhlgang, Training, Stress, Auffälligkeit, Gewicht, Tierarzt, Kosten, Tagescheck) werden unwiderruflich
               gelöscht. Die Übungsbibliothek (Name, Handzeichen, Ziel) und die allgemeine Notiz bleiben erhalten – nur die Kompetenz-Sterne je Übung
-              werden mit zurückgesetzt. Deine persönliche „Meine Geduld" bleibt ebenfalls erhalten. Das betrifft auch die Daten deines
+              werden mit zurückgesetzt. Deine persönliche „Meine Geduld“ bleibt ebenfalls erhalten. Das betrifft auch die Daten deines
               Partners/deiner Partnerin.
             </p>
             <div className="space-y-2">
@@ -429,4 +472,3 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     </div>
   );
 }
-

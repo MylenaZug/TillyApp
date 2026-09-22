@@ -1,8 +1,8 @@
 import { localDb } from "./local-db";
-import { onStorageChange, runSync } from "./sync";
+import { onStorageChange, runSync, setSyncUser } from "./sync";
 import type { EntryRecord, KvMutation, PatienceRecord } from "./types";
 
-export { onStorageChange, runSync, setupAutoSync } from "./sync";
+export { onStorageChange, runSync, setSyncUser, setupAutoSync } from "./sync";
 
 function now() {
   return Date.now();
@@ -12,10 +12,7 @@ function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-async function enqueue(mutate: (queue: Awaited<ReturnType<typeof localDb.getQueue>>) => void) {
-  const queue = await localDb.getQueue();
-  mutate(queue);
-  await localDb.setQueue(queue);
+async function triggerSync() {
   void runSync();
 }
 
@@ -29,10 +26,8 @@ export async function getKv(key: string): Promise<string | null> {
 export async function setKv(key: string, value: string) {
   const row: KvMutation = { key, value, updatedAt: now() };
   await localDb.putKv(row);
-  await enqueue((q) => {
-    q.kv = q.kv.filter((r) => r.key !== key);
-    q.kv.push(row);
-  });
+  await localDb.enqueueKv(row);
+  await triggerSync();
 }
 
 // ---- entries (Futter/Stuhlgang/Training/Stress/Symptom/Gewicht/Tierarzt/Kosten/Tagescheck) ----
@@ -51,16 +46,13 @@ export async function saveEntry(id: string | undefined, type: string, data: unkn
     deleted: 0,
   };
   await localDb.putEntry(row);
-  await enqueue((q) => {
-    q.entries = q.entries.filter((r) => r.id !== row.id);
-    q.entries.push(row);
-  });
+  await localDb.enqueueEntry(row);
+  await triggerSync();
   return row;
 }
 
 export async function deleteEntry(id: string) {
-  const map = await localDb.getAllEntries();
-  const existing = map[id];
+  const existing = await localDb.getEntry(id);
   const row: EntryRecord = {
     id,
     type: existing?.type || "",
@@ -69,10 +61,8 @@ export async function deleteEntry(id: string) {
     deleted: 1,
   };
   await localDb.putEntry(row);
-  await enqueue((q) => {
-    q.entries = q.entries.filter((r) => r.id !== id);
-    q.entries.push(row);
-  });
+  await localDb.enqueueEntry(row);
+  await triggerSync();
 }
 
 // ---- Geduld pro Google-Account (nicht geteilt, anders als Folgsamkeit/Sharklevel in entries) ----
@@ -82,16 +72,24 @@ export async function getPatience(userEmail: string, date: string): Promise<numb
   return map[`${userEmail}:${date}`]?.geduld ?? 0;
 }
 
-export async function setMyPatience(userEmail: string, date: string, geduld: number) {
-  const row: PatienceRecord = { userEmail, date, geduld, updatedAt: now() };
-  await localDb.putPatience(row);
-  await enqueue((q) => {
-    q.dailyPatience = q.dailyPatience.filter((r) => r.date !== date);
-    q.dailyPatience.push({ date, geduld, updatedAt: row.updatedAt });
-  });
+export async function listPatience(date: string): Promise<PatienceRecord[]> {
+  return localDb.listPatience(date);
 }
 
-export async function getPendingCount(): Promise<number> {
-  const q = await localDb.getQueue();
+export async function setMyPatience(userEmail: string, date: string, geduld: number) {
+  const row: PatienceRecord = { userEmail, date, geduld, updatedAt: now() };
+  setSyncUser(userEmail);
+  await localDb.putPatience(row);
+  await localDb.enqueuePatience(row);
+  await triggerSync();
+}
+
+export async function getPendingCount(userEmail?: string | null): Promise<number> {
+  const q = userEmail === undefined ? await localDb.getQueue() : await localDb.getQueueForUser(userEmail ?? null);
   return q.kv.length + q.entries.length + q.dailyPatience.length;
+}
+
+export async function getLastSyncedAt(userEmail?: string): Promise<number> {
+  const meta = await localDb.getMeta();
+  return userEmail ? meta.lastSyncedAtByUser[userEmail] ?? 0 : meta.lastSyncedAt;
 }

@@ -13,8 +13,14 @@ function notify() {
   listeners.forEach((l) => l());
 }
 
+let activeUserEmail: string | null = null;
+
+export function setSyncUser(userEmail: string | null) {
+  activeUserEmail = userEmail;
+}
+
 async function pushQueue() {
-  const queue = await localDb.getQueue();
+  const queue = await localDb.getQueueForUser(activeUserEmail);
   const hasChanges = queue.kv.length || queue.entries.length || queue.dailyPatience.length;
   if (!hasChanges) return;
 
@@ -26,8 +32,7 @@ async function pushQueue() {
   });
   if (!res.ok) throw new Error(`sync push failed: ${res.status}`);
 
-  // Erst nach erfolgreichem Push leeren, sonst gehen Aenderungen bei einem Fehler verloren.
-  await localDb.setQueue({ kv: [], entries: [], dailyPatience: [] });
+  await localDb.acknowledgeQueue(queue);
 }
 
 async function pullChanges() {
@@ -40,10 +45,17 @@ async function pullChanges() {
   for (const row of data.entries) await localDb.putEntry(row);
   for (const row of data.dailyPatience) await localDb.putPatience(row);
 
-  await localDb.setMeta({ lastSyncedAt: data.serverTime });
+  await localDb.setMeta({
+    lastSyncedAt: data.serverTime,
+    lastSyncedAtByUser: activeUserEmail
+      ? { ...meta.lastSyncedAtByUser, [activeUserEmail]: data.serverTime }
+      : meta.lastSyncedAtByUser,
+  });
 }
 
 let syncing = false;
+let autoSyncTeardown: (() => void) | null = null;
+let autoSyncSubscribers = 0;
 
 export async function runSync() {
   if (typeof navigator !== "undefined" && !navigator.onLine) return;
@@ -63,14 +75,26 @@ export async function runSync() {
 
 export function setupAutoSync() {
   if (typeof window === "undefined") return () => {};
-  const trigger = () => void runSync();
-  window.addEventListener("online", trigger);
-  window.addEventListener("focus", trigger);
-  const interval = setInterval(trigger, 2 * 60 * 1000);
-  trigger();
+  autoSyncSubscribers += 1;
+
+  if (!autoSyncTeardown) {
+    const trigger = () => void runSync();
+    window.addEventListener("online", trigger);
+    window.addEventListener("focus", trigger);
+    const interval = setInterval(trigger, 2 * 60 * 1000);
+    trigger();
+    autoSyncTeardown = () => {
+      window.removeEventListener("online", trigger);
+      window.removeEventListener("focus", trigger);
+      clearInterval(interval);
+    };
+  }
+
   return () => {
-    window.removeEventListener("online", trigger);
-    window.removeEventListener("focus", trigger);
-    clearInterval(interval);
+    autoSyncSubscribers = Math.max(0, autoSyncSubscribers - 1);
+    if (autoSyncSubscribers === 0 && autoSyncTeardown) {
+      autoSyncTeardown();
+      autoSyncTeardown = null;
+    }
   };
 }

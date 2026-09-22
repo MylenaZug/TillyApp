@@ -106,7 +106,8 @@ export function toLocalDateValue(iso: string) {
 }
 
 export function dateOnlyToISO(value: string) {
-  return new Date(`${value}T12:00:00`).toISOString();
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0).toISOString();
 }
 
 export function dateKey(d: Date | string) {
@@ -130,9 +131,13 @@ export function entrySummary(entry: AnyEntry): string {
         return `${entry.kg} kg${entry.daytime ? " · " + entry.daytime : ""}`;
       case "food":
         if (!entry.food) return "Eintrag gespeichert";
-        return `${entry.food}${entry.amount ? " · " + entry.amount + " g" : ""}`;
+        return `${entry.food}${entry.amount ? " · " + entry.amount + " g" : ""}${
+          entry.cost !== undefined && !Number.isNaN(Number(entry.cost)) ? " · " + Number(entry.cost).toFixed(2) + " €" : ""
+        }`;
       case "vet":
-        return `${entry.reason || "Termin"}`;
+        return `${entry.reason || "Termin"}${
+          entry.cost !== undefined && !Number.isNaN(Number(entry.cost)) ? " · " + Number(entry.cost).toFixed(2) + " €" : ""
+        }`;
       case "symptom":
         if (!entry.category) return "Eintrag gespeichert";
         return entry.category;
@@ -140,10 +145,14 @@ export function entrySummary(entry: AnyEntry): string {
         if (!entry.level) return "Eintrag gespeichert";
         return `${stressLabelFor(entry.level)} (${entry.level}/3)`;
       case "kosten":
-        if (entry.amount === undefined || Number.isNaN(Number(entry.amount))) return "Eintrag gespeichert";
+        if (!entry.category || entry.amount === undefined || Number.isNaN(Number(entry.amount))) return "Eintrag gespeichert";
         return `${entry.category} · ${Number(entry.amount).toFixed(2)} €`;
-      case "tagescheck":
-        return `Folgsamkeit ${starGlyphs(entry.folgsamkeit)} · Sharklevel ${starGlyphs(entry.energie)}`;
+      case "tagescheck": {
+        const parts = [`Folgsamkeit ${starGlyphs(entry.folgsamkeit)}`];
+        if (entry.geduld !== undefined) parts.push(`Geduld ${starGlyphs(entry.geduld)}`);
+        parts.push(`Sharklevel ${starGlyphs(entry.energie)}`);
+        return parts.join(" · ");
+      }
       default:
         return "Eintrag gespeichert";
     }

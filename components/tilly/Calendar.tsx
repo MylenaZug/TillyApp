@@ -3,9 +3,20 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, PawPrint } from "lucide-react";
 import { CALENDAR_CATEGORY_IDS, CATEGORIES, CATEGORIES_WITH_TIME, WEEKDAYS_DE, catMeta } from "@/lib/tilly/constants";
-import { dateKey, entrySummary, fmtTime, startOfDay } from "@/lib/tilly/helpers";
+import { dateKey, entrySummary, fmtTime, starGlyphs, startOfDay } from "@/lib/tilly/helpers";
 import type { AnyEntry } from "@/lib/tilly/types";
 import { CatIcon } from "./ui";
+
+function TrainingRatings({ entry }: { entry: AnyEntry }) {
+  if (entry.type !== "training") return null;
+
+  return (
+    <div className="mt-1 space-y-0.5 text-[12px] text-ink-soft">
+      <div>Tilly: {starGlyphs(entry.dogStars)}</div>
+      <div>Trainer:in: {starGlyphs(entry.trainerStars)}</div>
+    </div>
+  );
+}
 
 export function DayRow({ entry, onClick }: { entry: AnyEntry; onClick?: (entry: AnyEntry) => void }) {
   const meta = catMeta(entry.type);
@@ -24,7 +35,8 @@ export function DayRow({ entry, onClick }: { entry: AnyEntry; onClick?: (entry: 
         {showTime && <span className="text-[11px] text-ink-soft">{fmtTime(entry.date)}</span>}
       </div>
       <div className="mt-0.5 break-words text-[13px] text-ink-soft">{entrySummary(entry)}</div>
-      {entry.note && <div className="mt-1 break-words text-[12px] italic text-ink-soft">„{entry.note}"</div>}
+      <TrainingRatings entry={entry} />
+      {entry.note && <div className="mt-1 break-words text-[12px] italic text-ink-soft">„{entry.note}“</div>}
     </Wrapper>
   );
 }
@@ -176,6 +188,7 @@ export function TimelineRow({ entry, onClick }: { entry: AnyEntry; onClick: () =
           </span>
         </div>
         <div className="mt-0.5 break-words text-[13px] text-ink-soft">{entrySummary(entry)}</div>
+        <TrainingRatings entry={entry} />
       </div>
     </button>
   );

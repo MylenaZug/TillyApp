@@ -9,8 +9,12 @@ const mockSaveEntry = vi.fn();
 const mockDeleteEntry = vi.fn();
 const mockSetMyPatience = vi.fn();
 const mockGetPatience = vi.fn<(userEmail: string, date: string) => Promise<number>>();
+const mockListPatience = vi.fn();
 const mockGetKv = vi.fn<(key: string) => Promise<string | null>>();
 const mockSetKv = vi.fn();
+const mockOnStorageChange = vi.fn(() => () => {});
+const mockSetSyncUser = vi.fn();
+const mockSetupAutoSync = vi.fn(() => () => {});
 const mockUseSyncStatus = vi.fn();
 
 vi.mock("@/lib/storage", () => ({
@@ -19,8 +23,12 @@ vi.mock("@/lib/storage", () => ({
   deleteEntry: (...args: unknown[]) => mockDeleteEntry(...args),
   setMyPatience: (...args: unknown[]) => mockSetMyPatience(...args),
   getPatience: (userEmail: string, date: string) => mockGetPatience(userEmail, date),
+  listPatience: (...args: unknown[]) => mockListPatience(...args),
   getKv: (key: string) => mockGetKv(key),
   setKv: (...args: unknown[]) => mockSetKv(...args),
+  onStorageChange: () => mockOnStorageChange(),
+  setSyncUser: (...args: unknown[]) => mockSetSyncUser(...args),
+  setupAutoSync: () => mockSetupAutoSync(),
 }));
 vi.mock("@/lib/storage/useSyncStatus", () => ({
   useSyncStatus: () => mockUseSyncStatus(),
@@ -35,11 +43,12 @@ function makeEntry(overrides: Partial<EntryRecord>): EntryRecord {
 beforeEach(() => {
   mockListEntries.mockResolvedValue([]);
   mockGetPatience.mockResolvedValue(0);
+  mockListPatience.mockResolvedValue([]);
   mockGetKv.mockResolvedValue(null);
   mockSetKv.mockResolvedValue(undefined);
   mockSaveEntry.mockResolvedValue(makeEntry({}));
   mockDeleteEntry.mockResolvedValue(undefined);
-  mockUseSyncStatus.mockReturnValue({ status: "synced", pending: 0 });
+  mockUseSyncStatus.mockReturnValue({ status: "synced", pending: 0, lastSyncedAt: Date.now() - 5000 });
 });
 
 afterEach(() => {
@@ -68,6 +77,15 @@ describe("AppShell", () => {
 
     expect(mockSetMyPatience).toHaveBeenCalledWith("a@example.com", expect.any(String), 4);
     expect(mockSaveEntry).not.toHaveBeenCalled();
+  });
+
+  it("zeigt fremde Geduld-Werte unterhalb des eigenen Werts nur lesend an", async () => {
+    mockListPatience.mockResolvedValue([{ userEmail: "partner@example.com", date: "2026-09-22", geduld: 2, updatedAt: 1 }]);
+
+    render(<AppShell userEmail="a@example.com" />);
+
+    expect(await screen.findByText("partner@example.com")).toBeInTheDocument();
+    expect(screen.getByLabelText("partner@example.com: 2 von 5")).toBeInTheDocument();
   });
 
   it("speichert Folgsamkeit als gemeinsamen Tagescheck-Eintrag", async () => {
@@ -107,7 +125,7 @@ describe("AppShell", () => {
   });
 
   it("zeigt den Offline-Status aus useSyncStatus an", async () => {
-    mockUseSyncStatus.mockReturnValue({ status: "offline", pending: 0 });
+    mockUseSyncStatus.mockReturnValue({ status: "offline", pending: 0, lastSyncedAt: 0 });
 
     render(<AppShell userEmail="a@example.com" />);
 
@@ -115,7 +133,7 @@ describe("AppShell", () => {
   });
 
   it("zeigt die Anzahl ausstehender Aenderungen an", async () => {
-    mockUseSyncStatus.mockReturnValue({ status: "pending", pending: 2 });
+    mockUseSyncStatus.mockReturnValue({ status: "pending", pending: 2, lastSyncedAt: 0 });
 
     render(<AppShell userEmail="a@example.com" />);
 

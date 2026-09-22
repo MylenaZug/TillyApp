@@ -70,6 +70,24 @@ describe("GET /api/sync", () => {
     expect(body.kv).toHaveLength(1);
     expect(body.kv[0].key).toBe("new");
   });
+
+  it("liefert weiterhin alle gespeicherten dailyPatience-Werte fuer die freigeschalteten Nutzer", async () => {
+    mockAuth.mockResolvedValue({ user: { email: "a@example.com" } });
+    sqlite.exec(`
+      INSERT INTO daily_patience (user_email, date, geduld, updated_at)
+      VALUES ('a@example.com', '2026-09-18', 4, 100), ('b@example.com', '2026-09-18', 2, 101)
+    `);
+
+    const res = await GET(new NextRequest("http://localhost/api/sync?since=0"));
+    const body = await res.json();
+
+    expect(body.dailyPatience).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ userEmail: "a@example.com", geduld: 4 }),
+        expect.objectContaining({ userEmail: "b@example.com", geduld: 2 }),
+      ])
+    );
+  });
 });
 
 describe("POST /api/sync", () => {
@@ -124,16 +142,17 @@ describe("POST /api/sync", () => {
     ]);
   });
 
-  it("ignoriert ein untergeschobenes userEmail-Feld im Payload (kein Mass Assignment)", async () => {
+  it("lehnt ein untergeschobenes userEmail-Feld fuer einen anderen Account ab", async () => {
     mockAuth.mockResolvedValue({ user: { email: "real@example.com" } });
 
-    await POST(
+    const res = await POST(
       jsonRequest("http://localhost/api/sync", {
         dailyPatience: [{ userEmail: "attacker@example.com", date: "2026-09-18", geduld: 5, updatedAt: 1 }],
       })
     );
 
+    expect(res.status).toBe(400);
     const rows = sqlite.prepare("SELECT user_email FROM daily_patience").all();
-    expect(rows).toEqual([{ user_email: "real@example.com" }]);
+    expect(rows).toEqual([]);
   });
 });

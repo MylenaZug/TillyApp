@@ -202,7 +202,7 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
               return (
                 <div className="mb-3 flex items-center gap-2">
                   <span className="text-2xl font-bold text-amber">{avg.toFixed(1)}</span>
-                  <span className="text-sm text-ink-soft">Ø Stresslevel · meist "{avgLabel}"</span>
+                  <span className="text-sm text-ink-soft">Ø Stresslevel · meist „{avgLabel}“</span>
                 </div>
               );
             })()}

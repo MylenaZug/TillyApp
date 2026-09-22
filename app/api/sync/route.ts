@@ -6,7 +6,7 @@ import { dailyPatience, entries, kvStore } from "@/db/schema";
 
 type KvMutation = { key: string; value: string; updatedAt: number };
 type EntryMutation = { id: string; type: string; data: string; updatedAt: number; deleted?: 0 | 1 };
-type PatienceMutation = { date: string; geduld: number; updatedAt: number };
+type PatienceMutation = { userEmail?: string; date: string; geduld: number; updatedAt: number };
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -44,7 +44,6 @@ export async function POST(request: NextRequest) {
 
   const kv: KvMutation[] = Array.isArray(body.kv) ? body.kv : [];
   const entryMutations: EntryMutation[] = Array.isArray(body.entries) ? body.entries : [];
-  // Geduld gehoert immer dem eingeloggten Account - der Client kann keine fremde E-Mail einschleusen.
   const patience: PatienceMutation[] = Array.isArray(body.dailyPatience) ? body.dailyPatience : [];
 
   for (const row of kv) {
@@ -71,6 +70,10 @@ export async function POST(request: NextRequest) {
   }
 
   for (const row of patience) {
+    if (row.userEmail && row.userEmail !== userEmail) {
+      return NextResponse.json({ error: "dailyPatience owner mismatch" }, { status: 400 });
+    }
+
     await db
       .insert(dailyPatience)
       .values({ userEmail, date: row.date, geduld: row.geduld, updatedAt: row.updatedAt })

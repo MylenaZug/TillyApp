@@ -1,10 +1,11 @@
 "use client";
 
 import { Heart, RotateCcw, StickyNote, Zap } from "lucide-react";
+import type { PatienceRecord } from "@/lib/storage/types";
 import { ADDABLE_CATEGORIES } from "@/lib/tilly/constants";
 import { daysAgo, stressLabelFor } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId } from "@/lib/tilly/types";
-import { CatIcon, Rating, TextArea } from "./ui";
+import { CatIcon, Rating, ReadonlyRating, TextArea } from "./ui";
 
 const PATIENCE_ICON = { filled: "/icons/tilly/rating-patience-filled.png", empty: "/icons/tilly/rating-patience-empty.png" };
 const SHARK_ICON = { filled: "/icons/tilly/rating-shark-filled.png", empty: "/icons/tilly/rating-shark-empty.png" };
@@ -15,6 +16,7 @@ export function HomeView({
   folgsamkeit,
   energie,
   patience,
+  otherPatience,
   onUpdateFolgsamkeit,
   onUpdateEnergie,
   onUpdatePatience,
@@ -28,6 +30,7 @@ export function HomeView({
   folgsamkeit: number;
   energie: number;
   patience: number;
+  otherPatience: PatienceRecord[];
   onUpdateFolgsamkeit: (value: number) => void;
   onUpdateEnergie: (value: number) => void;
   onUpdatePatience: (value: number) => void;
@@ -47,7 +50,7 @@ export function HomeView({
         <div className="mb-4 flex items-center gap-2 rounded-2xl bg-amber-soft px-4 py-3">
           <Zap size={16} className="text-amber" />
           <span className="text-sm text-amber">
-            Gestern war Tillys Stresslevel „{stressLabel}" – heute vielleicht einen Ruhetag einlegen?
+            Gestern war Tillys Stresslevel „{stressLabel}“ – heute vielleicht einen Ruhetag einlegen?
           </span>
         </div>
       )}
@@ -59,6 +62,12 @@ export function HomeView({
         <Rating label="Folgsamkeit" value={folgsamkeit} onChange={onUpdateFolgsamkeit} colorClass="text-gold" />
         <div className="h-px bg-hairline" />
         <Rating label="Meine Geduld" value={patience} onChange={onUpdatePatience} icon={PATIENCE_ICON} colorClass="text-rose" />
+        {otherPatience.map((row) => (
+          <div key={`${row.userEmail}:${row.date}`}>
+            <div className="h-px bg-hairline" />
+            <ReadonlyRating label={row.userEmail} value={row.geduld} icon={PATIENCE_ICON} colorClass="text-rose" />
+          </div>
+        ))}
         <div className="h-px bg-hairline" />
         <Rating label="Sharklevel" value={energie} onChange={onUpdateEnergie} icon={SHARK_ICON} colorClass="text-amber" />
       </div>

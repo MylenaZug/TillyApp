@@ -25,5 +25,5 @@ export type SyncResponse = {
 export type PendingQueue = {
   kv: KvMutation[];
   entries: EntryRecord[];
-  dailyPatience: { date: string; geduld: number; updatedAt: number }[];
+  dailyPatience: PatienceRecord[];
 };
