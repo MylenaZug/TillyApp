@@ -5,14 +5,13 @@ import type { EntryRecord, KvMutation, PatienceRecord, PendingQueue } from "./ty
 
 type Meta = { lastSyncedAt: number };
 
-const DB_NAME = "tilly-tracker";
-const KV_STORE = createStore(DB_NAME, "kv");
-const ENTRIES_STORE = createStore(DB_NAME, "entries");
-const PATIENCE_STORE = createStore(DB_NAME, "patience");
-const QUEUE_KV_STORE = createStore(DB_NAME, "queue-kv");
-const QUEUE_ENTRIES_STORE = createStore(DB_NAME, "queue-entries");
-const QUEUE_PATIENCE_STORE = createStore(DB_NAME, "queue-patience");
-const META_STORE = createStore(DB_NAME, "meta");
+const KV_STORE = createStore("tilly-tracker-kv", "keyval");
+const ENTRIES_STORE = createStore("tilly-tracker-entries", "keyval");
+const PATIENCE_STORE = createStore("tilly-tracker-patience", "keyval");
+const QUEUE_KV_STORE = createStore("tilly-tracker-queue-kv", "keyval");
+const QUEUE_ENTRIES_STORE = createStore("tilly-tracker-queue-entries", "keyval");
+const QUEUE_PATIENCE_STORE = createStore("tilly-tracker-queue-patience", "keyval");
+const META_STORE = createStore("tilly-tracker-meta", "keyval");
 const META_KEY = "meta";
 
 type KvMap = Record<string, KvMutation>;
@@ -37,9 +36,9 @@ function matchesSnapshot<T>(current: T | undefined, snapshot: T) {
 
 async function readQueue(): Promise<PendingQueue> {
   const [kv, entryRows, dailyPatience] = await Promise.all([
-    entries<KvMutation>(QUEUE_KV_STORE),
-    entries<EntryRecord>(QUEUE_ENTRIES_STORE),
-    entries<PatienceRecord>(QUEUE_PATIENCE_STORE),
+    entries(QUEUE_KV_STORE) as Promise<[IDBValidKey, KvMutation][]>,
+    entries(QUEUE_ENTRIES_STORE) as Promise<[IDBValidKey, EntryRecord][]>,
+    entries(QUEUE_PATIENCE_STORE) as Promise<[IDBValidKey, PatienceRecord][]>,
   ]);
 
   return {
@@ -67,14 +66,14 @@ export const localDb = {
   },
 
   async getAllKv(): Promise<KvMap> {
-    return toRecord(await entries<KvMutation>(KV_STORE));
+    return toRecord((await entries(KV_STORE)) as [IDBValidKey, KvMutation][]);
   },
   async putKv(row: KvMutation) {
     await set(row.key, row, KV_STORE);
   },
 
   async getAllEntries(): Promise<EntriesMap> {
-    return toRecord(await entries<EntryRecord>(ENTRIES_STORE));
+    return toRecord((await entries(ENTRIES_STORE)) as [IDBValidKey, EntryRecord][]);
   },
   async getEntry(id: string): Promise<EntryRecord | undefined> {
     return (await get<EntryRecord>(id, ENTRIES_STORE)) ?? undefined;
@@ -84,13 +83,13 @@ export const localDb = {
   },
 
   async getAllPatience(): Promise<PatienceMap> {
-    return toRecord(await entries<PatienceRecord>(PATIENCE_STORE));
+    return toRecord((await entries(PATIENCE_STORE)) as [IDBValidKey, PatienceRecord][]);
   },
   async putPatience(row: PatienceRecord) {
     await set(patienceKey(row.userEmail, row.date), row, PATIENCE_STORE);
   },
   async listPatience(date: string): Promise<PatienceRecord[]> {
-    const rows = await entries<PatienceRecord>(PATIENCE_STORE);
+    const rows = (await entries(PATIENCE_STORE)) as [IDBValidKey, PatienceRecord][];
     return rows.map(([, row]) => row).filter((row) => row.date === date);
   },
 

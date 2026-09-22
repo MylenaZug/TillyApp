@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { DayRow, TimelineRow } from "@/components/tilly/Calendar";
 import type { AnyEntry } from "@/lib/tilly/types";
 
@@ -13,6 +13,10 @@ const trainingEntry: AnyEntry = {
   dogStars: 4,
   trainerStars: 3,
 };
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("Calendar rows", () => {
   it("zeigen bei Trainingseintraegen die Bewertungszeilen an", () => {

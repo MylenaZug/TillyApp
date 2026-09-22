@@ -444,7 +444,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             <p className="mb-5 text-sm text-ink-soft">
               Alle Einträge (Futter, Stuhlgang, Training, Stress, Auffälligkeit, Gewicht, Tierarzt, Kosten, Tagescheck) werden unwiderruflich
               gelöscht. Die Übungsbibliothek (Name, Handzeichen, Ziel) und die allgemeine Notiz bleiben erhalten – nur die Kompetenz-Sterne je Übung
-              werden mit zurückgesetzt. Deine persönliche „Meine Geduld" bleibt ebenfalls erhalten. Das betrifft auch die Daten deines
+              werden mit zurückgesetzt. Deine persönliche „Meine Geduld“ bleibt ebenfalls erhalten. Das betrifft auch die Daten deines
               Partners/deiner Partnerin.
             </p>
             <div className="space-y-2">

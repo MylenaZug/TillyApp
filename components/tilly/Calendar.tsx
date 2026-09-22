@@ -36,7 +36,7 @@ export function DayRow({ entry, onClick }: { entry: AnyEntry; onClick?: (entry: 
       </div>
       <div className="mt-0.5 break-words text-[13px] text-ink-soft">{entrySummary(entry)}</div>
       <TrainingRatings entry={entry} />
-      {entry.note && <div className="mt-1 break-words text-[12px] italic text-ink-soft">„{entry.note}"</div>}
+      {entry.note && <div className="mt-1 break-words text-[12px] italic text-ink-soft">„{entry.note}“</div>}
     </Wrapper>
   );
 }

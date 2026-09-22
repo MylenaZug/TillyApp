@@ -50,7 +50,7 @@ export function HomeView({
         <div className="mb-4 flex items-center gap-2 rounded-2xl bg-amber-soft px-4 py-3">
           <Zap size={16} className="text-amber" />
           <span className="text-sm text-amber">
-            Gestern war Tillys Stresslevel „{stressLabel}" – heute vielleicht einen Ruhetag einlegen?
+            Gestern war Tillys Stresslevel „{stressLabel}“ – heute vielleicht einen Ruhetag einlegen?
           </span>
         </div>
       )}
