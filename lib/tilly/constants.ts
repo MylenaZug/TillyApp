@@ -12,6 +12,9 @@ export type CategoryMeta = {
   soft: string;
   hex: string;
   hexSoft: string;
+  // Nur gesetzt, wenn "bg" zu hell fuer weissen Text ist (z.B. das helle Gold bei
+  // "symptom") - Chip faellt sonst auf text-white als aktive Textfarbe zurueck.
+  activeText?: string;
 };
 
 const ICON = (name: string) => `/icons/tilly/${name}.png`;
@@ -21,7 +24,7 @@ export const CATEGORIES: CategoryMeta[] = [
   { id: "stool", label: "Stuhlgang", icon: ICON("category-stool"), text: "text-rust", bg: "bg-rust", border: "border-rust", soft: "bg-rust-soft", hex: "#C0392B", hexSoft: "#F5DAD6" },
   { id: "training", label: "Training", icon: ICON("category-training"), text: "text-gold", bg: "bg-gold", border: "border-gold", soft: "bg-gold-soft", hex: "#2E8B57", hexSoft: "#DCEEE2" },
   { id: "stress", label: "Stress", icon: ICON("category-stress"), text: "text-amber", bg: "bg-amber", border: "border-amber", soft: "bg-amber-soft", hex: "#3457D5", hexSoft: "#DCE3F8" },
-  { id: "symptom", label: "Auffälligkeit", icon: ICON("category-symptom"), text: "text-berry", bg: "bg-berry", border: "border-berry", soft: "bg-berry-soft", hex: "#E6B800", hexSoft: "#FBF0C9" },
+  { id: "symptom", label: "Auffälligkeit", icon: ICON("category-symptom"), text: "text-berry", bg: "bg-berry", border: "border-berry", soft: "bg-berry-soft", hex: "#E6B800", hexSoft: "#FBF0C9", activeText: "text-ink" },
   { id: "weight", label: "Gewicht", icon: ICON("category-weight"), text: "text-teal", bg: "bg-teal", border: "border-teal", soft: "bg-teal-soft", hex: "#B8860B", hexSoft: "#F3E7C9" },
   { id: "vet", label: "Tierarzt", icon: ICON("category-vet"), text: "text-plum", bg: "bg-plum", border: "border-plum", soft: "bg-plum-soft", hex: "#7A5C8E", hexSoft: "#EAE3F0" },
   { id: "kosten", label: "Kosten", icon: ICON("category-kosten"), text: "text-slate", bg: "bg-slate", border: "border-slate", soft: "bg-slate-soft", hex: "#546A7B", hexSoft: "#DCE4E8" },
@@ -50,6 +53,7 @@ export const STRESS_LEVELS = [
   { value: 3, label: "Zuviel" },
 ];
 
+export const FOOD_AMOUNT_UNITS = ["Gramm", "Dosen"];
 export const STOOL_CONSISTENCY = ["Fest", "Weich", "Breiig", "Wässrig"];
 export const STOOL_AMOUNTS = ["Viel", "Mittel", "Wenig"];
 export const DAYTIME_OPTIONS = ["Morgens", "Mittags", "Abends"];

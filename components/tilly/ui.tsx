@@ -115,12 +115,14 @@ export function Chip({
   children,
   colorClass = "text-ink",
   activeBgClass = "bg-ink",
+  activeTextClass = "text-white",
 }: {
   active: boolean;
   onClick: () => void;
   children: ReactNode;
   colorClass?: string;
   activeBgClass?: string;
+  activeTextClass?: string;
 }) {
   return (
     <button
@@ -128,7 +130,7 @@ export function Chip({
       onClick={onClick}
       className={
         active
-          ? `rounded-full border px-3 py-1.5 text-sm text-white ${activeBgClass} border-transparent`
+          ? `rounded-full border px-3 py-1.5 text-sm ${activeTextClass} ${activeBgClass} border-transparent`
           : `rounded-full border border-hairline px-3 py-1.5 text-sm ${colorClass}`
       }
     >

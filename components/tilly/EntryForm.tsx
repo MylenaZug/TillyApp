@@ -5,6 +5,7 @@ import { Check, Trash2, X } from "lucide-react";
 import {
   CATEGORIES_WITH_TIME,
   DAYTIME_OPTIONS,
+  FOOD_AMOUNT_UNITS,
   KOSTEN_CATEGORIES,
   STOOL_AMOUNTS,
   STOOL_COLORS,
@@ -69,6 +70,7 @@ export function EntryForm({
 
   const [food, setFood] = useState(existing?.food || "");
   const [amount, setAmount] = useState(existing?.amount !== undefined ? String(existing.amount) : "");
+  const [amountUnit, setAmountUnit] = useState(existing?.amountUnit || FOOD_AMOUNT_UNITS[0]);
 
   const [reason, setReason] = useState(existing?.reason || "");
   const symptomOptions = [...new Set([...SYMPTOM_CATEGORIES.filter((c) => c !== "Anderes"), ...(symptomTypes || [])])];
@@ -105,7 +107,8 @@ export function EntryForm({
     if (categoryId === "stool") data = { ...base, consistency, color, flags, stoolAmount };
     if (categoryId === "training") data = { ...base, activity: activity.trim(), dogStars, trainerStars };
     if (categoryId === "weight") data = { ...base, kg: Number(kg), daytime };
-    if (categoryId === "food") data = { ...base, food: food.trim(), amount: amount !== "" ? Number(amount) : undefined };
+    if (categoryId === "food")
+      data = { ...base, food: food.trim(), amount: amount !== "" ? Number(amount) : undefined, amountUnit };
     if (categoryId === "vet") data = { ...base, reason: reason.trim() };
     if (categoryId === "symptom")
       data = { ...base, category: symptomCategory === "Anderes" && customSymptom.trim() ? customSymptom.trim() : symptomCategory };
@@ -224,8 +227,22 @@ export function EntryForm({
               )}
             </div>
             <div>
-              <FieldLabel>Menge (g)</FieldLabel>
-              <TextInput type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="z. B. 200" />
+              <FieldLabel>Menge</FieldLabel>
+              <div className="mb-2 flex flex-wrap gap-2">
+                {FOOD_AMOUNT_UNITS.map((u) => (
+                  <Chip key={u} active={amountUnit === u} onClick={() => setAmountUnit(u)} colorClass={meta.text} activeBgClass={meta.bg}>
+                    {u}
+                  </Chip>
+                ))}
+              </div>
+              <TextInput
+                type="number"
+                inputMode="decimal"
+                step={amountUnit === "Gramm" ? "1" : "0.25"}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder={amountUnit === "Gramm" ? "z. B. 200" : "z. B. 1"}
+              />
             </div>
             <div className="rounded-xl border border-hairline bg-bg p-3">
               <div className="mb-1.5 flex items-center justify-between">
@@ -256,7 +273,14 @@ export function EntryForm({
             <FieldLabel>Kategorie</FieldLabel>
             <div className="flex flex-wrap gap-2">
               {[...symptomOptions, "Anderes"].map((c) => (
-                <Chip key={c} active={symptomCategory === c} onClick={() => setSymptomCategory(c)} colorClass={meta.text} activeBgClass={meta.bg}>
+                <Chip
+                  key={c}
+                  active={symptomCategory === c}
+                  onClick={() => setSymptomCategory(c)}
+                  colorClass={meta.text}
+                  activeBgClass={meta.bg}
+                  activeTextClass={meta.activeText}
+                >
                   {c}
                 </Chip>
               ))}

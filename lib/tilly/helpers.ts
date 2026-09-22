@@ -132,7 +132,7 @@ export function entrySummary(entry: AnyEntry): string {
         return `${entry.kg} kg${entry.daytime ? " · " + entry.daytime : ""}`;
       case "food":
         if (!entry.food) return "Eintrag gespeichert";
-        return `${entry.food}${entry.amount ? " · " + entry.amount + " g" : ""}`;
+        return `${entry.food}${entry.amount ? " · " + entry.amount + " " + (entry.amountUnit || "Gramm") : ""}`;
       case "vet":
         return `${entry.reason || "Termin"}`;
       case "symptom":
