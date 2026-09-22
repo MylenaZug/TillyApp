@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getLastSyncedAt, getPendingCount, onStorageChange, runSync, setSyncUser, setupAutoSync } from "@/lib/storage";
+import { getLastSyncedAt, getPendingCount, onStorageChange } from "@/lib/storage";
 
 export type SyncStatus = "offline" | "pending" | "synced";
 
@@ -11,7 +11,6 @@ export function useSyncStatus(userEmail: string): { status: SyncStatus; pending:
   const [lastSyncedAt, setLastSyncedAt] = useState(0);
 
   useEffect(() => {
-    setSyncUser(userEmail);
     const refreshStatus = () =>
       void Promise.all([getPendingCount(userEmail), getLastSyncedAt()]).then(([nextPending, nextLastSyncedAt]) => {
         setPending(nextPending);
@@ -19,23 +18,17 @@ export function useSyncStatus(userEmail: string): { status: SyncStatus; pending:
       });
     refreshStatus();
     const unsubscribe = onStorageChange(refreshStatus);
-
-    const handleOnline = () => {
-      setOnline(true);
-      void runSync();
-    };
+    const handleOnline = () => setOnline(true);
     const handleOffline = () => setOnline(false);
 
     setOnline(navigator.onLine);
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
-    const stopAutoSync = setupAutoSync();
 
     return () => {
       unsubscribe();
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
-      stopAutoSync();
     };
   }, [userEmail]);
 

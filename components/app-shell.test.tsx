@@ -13,6 +13,8 @@ const mockListPatience = vi.fn();
 const mockGetKv = vi.fn<(key: string) => Promise<string | null>>();
 const mockSetKv = vi.fn();
 const mockOnStorageChange = vi.fn(() => () => {});
+const mockSetSyncUser = vi.fn();
+const mockSetupAutoSync = vi.fn(() => () => {});
 const mockUseSyncStatus = vi.fn();
 
 vi.mock("@/lib/storage", () => ({
@@ -25,6 +27,8 @@ vi.mock("@/lib/storage", () => ({
   getKv: (key: string) => mockGetKv(key),
   setKv: (...args: unknown[]) => mockSetKv(...args),
   onStorageChange: () => mockOnStorageChange(),
+  setSyncUser: (...args: unknown[]) => mockSetSyncUser(...args),
+  setupAutoSync: () => mockSetupAutoSync(),
 }));
 vi.mock("@/lib/storage/useSyncStatus", () => ({
   useSyncStatus: () => mockUseSyncStatus(),

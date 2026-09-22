@@ -140,7 +140,7 @@ export function entrySummary(entry: AnyEntry): string {
         if (!entry.level) return "Eintrag gespeichert";
         return `${stressLabelFor(entry.level)} (${entry.level}/3)`;
       case "kosten":
-        if (entry.amount === undefined || Number.isNaN(Number(entry.amount))) return "Eintrag gespeichert";
+        if (!entry.category || entry.amount === undefined || Number.isNaN(Number(entry.amount))) return "Eintrag gespeichert";
         return `${entry.category} · ${Number(entry.amount).toFixed(2)} €`;
       case "tagescheck": {
         const parts = [`Folgsamkeit ${starGlyphs(entry.folgsamkeit)}`];

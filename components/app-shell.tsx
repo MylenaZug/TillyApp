@@ -10,8 +10,10 @@ import {
   listEntries,
   onStorageChange,
   saveEntry,
+  setSyncUser,
   setKv,
   setMyPatience,
+  setupAutoSync,
 } from "@/lib/storage";
 import { useSyncStatus, type SyncStatus } from "@/lib/storage/useSyncStatus";
 import type { EntryRecord, PatienceRecord } from "@/lib/storage/types";
@@ -124,6 +126,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   }
 
   useEffect(() => {
+    setSyncUser(userEmail);
+    const stopAutoSync = setupAutoSync();
     (async () => {
       try {
         const [t, f, s, ex, gn, fp] = await Promise.all([
@@ -155,6 +159,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
     return () => {
       unsubscribe();
+      stopAutoSync();
       window.clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
