@@ -15,7 +15,7 @@ import { useSyncStatus, type SyncStatus } from "@/lib/storage/useSyncStatus";
 import type { EntryRecord } from "@/lib/storage/types";
 import { ADDABLE_CATEGORIES, SYMPTOM_CATEGORIES, catMeta } from "@/lib/tilly/constants";
 import { daysAgo, dateKey, nowLocalISO, tillyAge } from "@/lib/tilly/helpers";
-import type { AnyEntry, CategoryId, Exercise } from "@/lib/tilly/types";
+import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, PawTrailLoader, PrimaryButton } from "@/components/tilly/ui";
 import { HomeView } from "@/components/tilly/HomeView";
 import { HistoryView } from "@/components/tilly/HistoryView";
@@ -77,8 +77,10 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const [noteStatus, setNoteStatus] = useState("");
   const noteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [foodPlan, setFoodPlan] = useState("");
+  const [foodPlanSlots, setFoodPlanSlots] = useState<FoodPlanSlots>({});
   const [foodPlanStatus, setFoodPlanStatus] = useState("");
   const foodPlanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const foodPlanSlotsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [patience, setPatience] = useState(0);
 
   const [view, setView] = useState<View>("home");
@@ -101,19 +103,21 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   useEffect(() => {
     (async () => {
       try {
-        const [t, f, s, ex, gn, fp] = await Promise.all([
+        const [t, f, s, ex, gn, fp, fps] = await Promise.all([
           getKv("training-types"),
           getKv("food-types"),
           getKv("symptom-types"),
           getKv("exercises"),
           getKv("general-note"),
           getKv("food-plan"),
+          getKv("food-plan-slots"),
         ]);
         if (t) setTrainingTypes(JSON.parse(t));
         if (f) setFoodTypes(JSON.parse(f));
         if (s) setSymptomTypes(JSON.parse(s));
         if (gn) setGeneralNote(gn);
         if (fp) setFoodPlan(fp);
+        if (fps) setFoodPlanSlots(JSON.parse(fps));
         // Standanduebungen kommen als DB-Seed (siehe db/seed.ts) bereits befuellt aus dem
         // kv_store - hier nur noch laden, kein Runtime-Merge/Seed im Client mehr noetig.
         if (ex) setExercises(JSON.parse(ex));
@@ -228,6 +232,37 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     }, 600);
   }
 
+  function handleFoodPlanSlotsChange(next: FoodPlanSlots) {
+    setFoodPlanSlots(next);
+    setFoodPlanStatus("saving");
+    if (foodPlanSlotsTimerRef.current) clearTimeout(foodPlanSlotsTimerRef.current);
+    foodPlanSlotsTimerRef.current = setTimeout(async () => {
+      try {
+        await setKv("food-plan-slots", JSON.stringify(next));
+        setFoodPlanStatus("saved");
+        setTimeout(() => setFoodPlanStatus(""), 1500);
+      } catch {
+        setFoodPlanStatus("");
+      }
+    }, 600);
+  }
+
+  // Ein-Tap-Bestaetigung fuer eine geplante Mahlzeit von der Startseite aus - legt den
+  // Eintrag 1:1 wie im Plan hinterlegt an, ohne das volle Formular zu oeffnen.
+  async function confirmFoodPlanSlot(daytime: string) {
+    const slot = foodPlanSlots[daytime];
+    if (!slot || !slot.food.trim()) return;
+    const data = { date: nowLocalISO(), food: slot.food.trim(), amount: slot.amount, amountUnit: slot.amountUnit, daytime };
+    await saveEntry(undefined, "food", data);
+    if (!foodTypes.includes(slot.food.trim())) {
+      const next = [slot.food.trim(), ...foodTypes];
+      setFoodTypes(next);
+      void setKv("food-types", JSON.stringify(next));
+    }
+    await refresh();
+    showToast(`${catMeta("food").label} gespeichert ✓`);
+  }
+
   async function saveExercise(exercise: Exercise) {
     const exists = exercises.some((e) => e.id === exercise.id);
     const next = exists ? exercises.map((e) => (e.id === exercise.id ? exercise : e)) : [...exercises, exercise];
@@ -321,6 +356,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             onNoteChange={handleNoteChange}
             noteStatus={noteStatus}
             onRequestReset={() => setResetConfirmOpen(true)}
+            foodPlanSlots={foodPlanSlots}
+            onConfirmFoodSlot={(daytime) => void confirmFoodPlanSlot(daytime)}
           />
         )}
         {view === "history" && (
@@ -345,6 +382,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             symptomTypes={symptomTypes}
             foodPlan={foodPlan}
             onFoodPlanChange={handleFoodPlanChange}
+            foodPlanSlots={foodPlanSlots}
+            onFoodPlanSlotsChange={handleFoodPlanSlotsChange}
             foodPlanStatus={foodPlanStatus}
             onSave={(data) => void handleSaveEntry(data)}
             onDelete={editingId ? () => void handleDeleteEntry() : null}

@@ -1,9 +1,9 @@
 "use client";
 
-import { Heart, RotateCcw, Scale, StickyNote, Zap } from "lucide-react";
-import { ADDABLE_CATEGORIES } from "@/lib/tilly/constants";
+import { Check, Heart, RotateCcw, Scale, StickyNote, UtensilsCrossed, Zap } from "lucide-react";
+import { ADDABLE_CATEGORIES, DAYTIME_OPTIONS, catMeta } from "@/lib/tilly/constants";
 import { daysAgo, stressLabelFor } from "@/lib/tilly/helpers";
-import type { AnyEntry, CategoryId } from "@/lib/tilly/types";
+import type { AnyEntry, CategoryId, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, Rating, TextArea } from "./ui";
 
 const PATIENCE_ICON = { filled: "/icons/tilly/rating-patience-filled.png", empty: "/icons/tilly/rating-patience-empty.png" };
@@ -22,6 +22,8 @@ export function HomeView({
   onNoteChange,
   noteStatus,
   onRequestReset,
+  foodPlanSlots,
+  onConfirmFoodSlot,
 }: {
   entries: AnyEntry[];
   onOpenAdd: (categoryId: CategoryId) => void;
@@ -35,6 +37,8 @@ export function HomeView({
   onNoteChange: (value: string) => void;
   noteStatus: string;
   onRequestReset: () => void;
+  foodPlanSlots: FoodPlanSlots;
+  onConfirmFoodSlot: (daytime: string) => void;
 }) {
   // Nur der gestrige Eintrag zaehlt: hoher Stress gestern -> heute als Ruhetag vorschlagen
   const yesterdayStress = entries.find((e) => e.type === "stress" && daysAgo(e.date) === 1);
@@ -42,6 +46,9 @@ export function HomeView({
   const stressLabel = yesterdayStress ? stressLabelFor(yesterdayStress.level || 0) : "";
 
   const showWeightReminder = !entries.some((e) => e.type === "weight" && daysAgo(e.date) === 0);
+
+  const todayFoodEntries = entries.filter((e) => e.type === "food" && daysAgo(e.date) === 0);
+  const foodSlotsToday = DAYTIME_OPTIONS.filter((d) => foodPlanSlots[d]?.food?.trim());
 
   return (
     <div>
@@ -62,6 +69,43 @@ export function HomeView({
           <Scale size={16} className="shrink-0 text-teal" />
           <span className="text-sm text-teal">Tilly wurde heute noch nicht gewogen – jetzt eintragen?</span>
         </button>
+      )}
+
+      {foodSlotsToday.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-hairline bg-card p-4">
+          <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+            <UtensilsCrossed size={15} className="text-sage" /> Futter heute
+          </div>
+          <div className="space-y-2">
+            {foodSlotsToday.map((d) => {
+              const slot = foodPlanSlots[d];
+              const done = todayFoodEntries.some((e) => e.daytime === d);
+              return (
+                <div key={d} className="flex items-center justify-between gap-2 rounded-xl border border-hairline bg-bg px-3 py-2">
+                  <div>
+                    <div className="text-xs font-medium text-ink-soft">{d}</div>
+                    <div className="text-sm text-ink">
+                      {slot.food}
+                      {slot.amount ? ` · ${slot.amount} ${slot.amountUnit || "Gramm"}` : ""}
+                    </div>
+                  </div>
+                  {done ? (
+                    <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-sage">
+                      <Check size={14} /> erledigt
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => onConfirmFoodSlot(d)}
+                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-white ${catMeta("food").bg}`}
+                    >
+                      Bestätigen
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       <div className="mb-4 rounded-2xl border border-hairline bg-card p-4">

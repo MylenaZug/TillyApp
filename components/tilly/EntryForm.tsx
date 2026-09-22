@@ -15,7 +15,7 @@ import {
   catMeta,
 } from "@/lib/tilly/constants";
 import { dateOnlyToISO, nowLocalISO, toLocalDateValue, toLocalInputValue } from "@/lib/tilly/helpers";
-import type { AnyEntry, CategoryId, Exercise } from "@/lib/tilly/types";
+import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, Chip, FieldLabel, PrimaryButton, StarRow, TextArea, TextInput } from "./ui";
 
 const SHARK_ICON = { filled: "/icons/tilly/rating-shark-filled.png", empty: "/icons/tilly/rating-shark-empty.png" };
@@ -29,6 +29,8 @@ export function EntryForm({
   symptomTypes,
   foodPlan,
   onFoodPlanChange,
+  foodPlanSlots,
+  onFoodPlanSlotsChange,
   foodPlanStatus,
   onSave,
   onDelete,
@@ -42,6 +44,8 @@ export function EntryForm({
   symptomTypes: string[];
   foodPlan: string;
   onFoodPlanChange: (value: string) => void;
+  foodPlanSlots: FoodPlanSlots;
+  onFoodPlanSlotsChange: (slots: FoodPlanSlots) => void;
   foodPlanStatus: string;
   onSave: (data: Record<string, unknown>) => void;
   onDelete: (() => void) | null;
@@ -71,6 +75,7 @@ export function EntryForm({
   const [food, setFood] = useState(existing?.food || "");
   const [amount, setAmount] = useState(existing?.amount !== undefined ? String(existing.amount) : "");
   const [amountUnit, setAmountUnit] = useState(existing?.amountUnit || FOOD_AMOUNT_UNITS[0]);
+  const [foodDaytime, setFoodDaytime] = useState(existing?.daytime || "");
 
   const [reason, setReason] = useState(existing?.reason || "");
   const symptomOptions = [...new Set([...SYMPTOM_CATEGORIES.filter((c) => c !== "Anderes"), ...(symptomTypes || [])])];
@@ -108,7 +113,13 @@ export function EntryForm({
     if (categoryId === "training") data = { ...base, activity: activity.trim(), dogStars, trainerStars };
     if (categoryId === "weight") data = { ...base, kg: Number(kg), daytime };
     if (categoryId === "food")
-      data = { ...base, food: food.trim(), amount: amount !== "" ? Number(amount) : undefined, amountUnit };
+      data = {
+        ...base,
+        food: food.trim(),
+        amount: amount !== "" ? Number(amount) : undefined,
+        amountUnit,
+        daytime: foodDaytime || undefined,
+      };
     if (categoryId === "vet") data = { ...base, reason: reason.trim() };
     if (categoryId === "symptom")
       data = { ...base, category: symptomCategory === "Anderes" && customSymptom.trim() ? customSymptom.trim() : symptomCategory };
@@ -121,6 +132,11 @@ export function EntryForm({
   const toggleFlag = (f: string) => setFlags((cur) => (cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]));
   const toggleConsistency = (c: string) =>
     setConsistency((cur) => (cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c]));
+
+  const updateFoodPlanSlot = (daytimeKey: string, patch: Partial<{ food: string; amount?: number; amountUnit: string }>) => {
+    const current = foodPlanSlots[daytimeKey] || { food: "", amountUnit: FOOD_AMOUNT_UNITS[0] };
+    onFoodPlanSlotsChange({ ...foodPlanSlots, [daytimeKey]: { ...current, ...patch } });
+  };
 
   return (
     <div className="pb-4">
@@ -238,25 +254,94 @@ export function EntryForm({
               <TextInput
                 type="number"
                 inputMode="decimal"
+                min="0"
                 step={amountUnit === "Gramm" ? "1" : "0.25"}
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "" || Number(v) >= 0) setAmount(v);
+                }}
                 placeholder={amountUnit === "Gramm" ? "z. B. 200" : "z. B. 1"}
               />
             </div>
+            <div>
+              <FieldLabel>Tageszeit (optional)</FieldLabel>
+              <div className="flex flex-wrap gap-2">
+                {DAYTIME_OPTIONS.map((d) => (
+                  <Chip
+                    key={d}
+                    active={foodDaytime === d}
+                    onClick={() => setFoodDaytime((cur) => (cur === d ? "" : d))}
+                    colorClass={meta.text}
+                    activeBgClass={meta.bg}
+                  >
+                    {d}
+                  </Chip>
+                ))}
+              </div>
+            </div>
             <div className="rounded-xl border border-hairline bg-bg p-3">
               <div className="mb-1.5 flex items-center justify-between">
-                <FieldLabel>Aktueller Futterplan</FieldLabel>
+                <FieldLabel>Futterplan</FieldLabel>
                 <span className="min-w-11 text-right text-[11px] text-ink-soft">
                   {foodPlanStatus === "saving" ? "speichert…" : foodPlanStatus === "saved" ? "gespeichert" : ""}
                 </span>
               </div>
-              <TextArea
-                value={foodPlan}
-                onChange={(e) => onFoodPlanChange(e.target.value)}
-                placeholder="z. B. Morgens 150g Nassfutter Huhn, Mittags Kauartikel, Abends 150g Trockenfutter…"
-                rows={3}
-              />
+              <div className="space-y-3">
+                {DAYTIME_OPTIONS.map((d) => {
+                  const slot = foodPlanSlots[d] || { food: "", amount: undefined, amountUnit: FOOD_AMOUNT_UNITS[0] };
+                  return (
+                    <div key={d}>
+                      <div className="mb-1 text-xs font-medium text-ink-soft">{d}</div>
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <TextInput
+                            value={slot.food}
+                            onChange={(e) => updateFoodPlanSlot(d, { food: e.target.value })}
+                            placeholder="z. B. Nassfutter Huhn"
+                          />
+                        </div>
+                        <div className="w-24">
+                          <TextInput
+                            type="number"
+                            inputMode="decimal"
+                            min="0"
+                            step={(slot.amountUnit || FOOD_AMOUNT_UNITS[0]) === "Gramm" ? "1" : "0.25"}
+                            value={slot.amount ?? ""}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              if (v === "" || Number(v) >= 0) updateFoodPlanSlot(d, { amount: v !== "" ? Number(v) : undefined });
+                            }}
+                            placeholder="Menge"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-2">
+                        {FOOD_AMOUNT_UNITS.map((u) => (
+                          <Chip
+                            key={u}
+                            active={(slot.amountUnit || FOOD_AMOUNT_UNITS[0]) === u}
+                            onClick={() => updateFoodPlanSlot(d, { amountUnit: u })}
+                            colorClass={meta.text}
+                            activeBgClass={meta.bg}
+                          >
+                            {u}
+                          </Chip>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 border-t border-hairline pt-3">
+                <FieldLabel>Sonstiges / Ausnahmen</FieldLabel>
+                <TextArea
+                  value={foodPlan}
+                  onChange={(e) => onFoodPlanChange(e.target.value)}
+                  placeholder="z. B. Montags zusätzlich ein Kauartikel, im Urlaub anderes Futter…"
+                  rows={2}
+                />
+              </div>
             </div>
           </>
         )}
