@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, RotateCcw, StickyNote, Zap } from "lucide-react";
+import { Heart, RotateCcw, Scale, StickyNote, Zap } from "lucide-react";
 import { ADDABLE_CATEGORIES } from "@/lib/tilly/constants";
 import { daysAgo, stressLabelFor } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId } from "@/lib/tilly/types";
@@ -41,6 +41,8 @@ export function HomeView({
   const showStressAlert = !!yesterdayStress && (yesterdayStress.level || 0) >= 2;
   const stressLabel = yesterdayStress ? stressLabelFor(yesterdayStress.level || 0) : "";
 
+  const showWeightReminder = !entries.some((e) => e.type === "weight" && daysAgo(e.date) === 0);
+
   return (
     <div>
       {showStressAlert && (
@@ -50,6 +52,16 @@ export function HomeView({
             Gestern war Tillys Stresslevel „{stressLabel}" – heute vielleicht einen Ruhetag einlegen?
           </span>
         </div>
+      )}
+
+      {showWeightReminder && (
+        <button
+          onClick={() => onOpenAdd("weight")}
+          className="mb-4 flex w-full items-center gap-2 rounded-2xl bg-teal-soft px-4 py-3 text-left"
+        >
+          <Scale size={16} className="shrink-0 text-teal" />
+          <span className="text-sm text-teal">Tilly wurde heute noch nicht gewogen – jetzt eintragen?</span>
+        </button>
       )}
 
       <div className="mb-4 rounded-2xl border border-hairline bg-card p-4">
