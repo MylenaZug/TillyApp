@@ -13,8 +13,14 @@ function notify() {
   listeners.forEach((l) => l());
 }
 
+let activeUserEmail: string | null = null;
+
+export function setSyncUser(userEmail: string | null) {
+  activeUserEmail = userEmail;
+}
+
 async function pushQueue() {
-  const queue = await localDb.getQueue();
+  const queue = await localDb.getQueueForUser(activeUserEmail);
   const hasChanges = queue.kv.length || queue.entries.length || queue.dailyPatience.length;
   if (!hasChanges) return;
 
@@ -26,8 +32,7 @@ async function pushQueue() {
   });
   if (!res.ok) throw new Error(`sync push failed: ${res.status}`);
 
-  // Erst nach erfolgreichem Push leeren, sonst gehen Aenderungen bei einem Fehler verloren.
-  await localDb.setQueue({ kv: [], entries: [], dailyPatience: [] });
+  await localDb.acknowledgeQueue(queue);
 }
 
 async function pullChanges() {

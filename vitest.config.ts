@@ -1,5 +1,8 @@
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
+
+const rootDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
   // Next.js-Komponenten importieren React nicht explizit (automatic JSX runtime).
@@ -12,7 +15,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "."),
+      "@": path.resolve(rootDir),
     },
   },
 });

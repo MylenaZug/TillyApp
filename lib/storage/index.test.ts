@@ -1,12 +1,12 @@
 // Storage-Layer laeuft komplett auf idb-keyval; fake-indexeddb (via vitest.setup.ts)
 // stellt eine In-Memory-IndexedDB fuer diese Tests bereit.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clear } from "idb-keyval";
 
 vi.mock("@/lib/storage/sync", () => ({
   runSync: vi.fn(),
   onStorageChange: vi.fn(() => () => {}),
   setupAutoSync: vi.fn(() => () => {}),
+  setSyncUser: vi.fn(),
 }));
 
 import {
@@ -22,7 +22,7 @@ import {
 import { localDb } from "@/lib/storage/local-db";
 
 beforeEach(async () => {
-  await clear();
+  await localDb.clearAll();
 });
 
 describe("kv-Einstellungen", () => {
@@ -98,6 +98,19 @@ describe("Geduld pro Person", () => {
     await setMyPatience("a@example.com", "2026-09-18", 4);
 
     expect(await getPatience("a@example.com", "2026-09-19")).toBe(0);
+  });
+
+  it("haelt die Besitzer-E-Mail auch in der Queue pro Person und Tag getrennt", async () => {
+    await setMyPatience("a@example.com", "2026-09-18", 4);
+    await setMyPatience("b@example.com", "2026-09-18", 2);
+
+    const queue = await localDb.getQueue();
+    expect(queue.dailyPatience).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ userEmail: "a@example.com", date: "2026-09-18", geduld: 4 }),
+        expect.objectContaining({ userEmail: "b@example.com", date: "2026-09-18", geduld: 2 }),
+      ])
+    );
   });
 });
 

@@ -35,8 +35,42 @@ export function PawTrailLoader() {
   );
 }
 
-function StarMark({ icon = DEFAULT_STAR_ICON, filled }: { icon?: StarIconSrc; colorClass?: string; filled: boolean }) {
+function StarMark({ icon = DEFAULT_STAR_ICON, filled }: { icon?: StarIconSrc; filled: boolean }) {
   return <img src={filled ? icon.filled : icon.empty} width={26} height={26} alt="" draggable={false} className="object-contain" />;
+}
+
+function RatingMarks({
+  value,
+  icon,
+  label,
+  onChange,
+}: {
+  value: number;
+  icon?: StarIconSrc;
+  label: string;
+  onChange?: (value: number) => void;
+}) {
+  return (
+    <div className="flex" role={onChange ? "radiogroup" : undefined} aria-label={onChange ? label : undefined}>
+      {[1, 2, 3, 4, 5].map((score) =>
+        onChange ? (
+          <button
+            key={score}
+            onClick={() => onChange(score === value ? 0 : score)}
+            className="flex h-9 w-9 items-center justify-center transition-transform active:scale-90"
+            aria-label={`${label}: ${score}`}
+            aria-pressed={score <= value}
+          >
+            <StarMark icon={icon} filled={score <= value} />
+          </button>
+        ) : (
+          <span key={score} className="flex h-9 w-9 items-center justify-center" aria-hidden="true">
+            <StarMark icon={icon} filled={score <= value} />
+          </span>
+        )
+      )}
+    </div>
+  );
 }
 
 // StarRow: fuer Formulare gedacht (kein Screenreader-Radiogroup, dafuer togglebar per
@@ -57,7 +91,7 @@ export function StarRow({
   return (
     <div className="flex items-center justify-between py-1.5">
       <span className="text-sm text-ink-soft">{label}</span>
-      <div className="flex">
+      <div className={colorClass}>
         {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
@@ -66,7 +100,7 @@ export function StarRow({
             className="flex h-9 w-9 items-center justify-center transition-transform active:scale-90"
             aria-label={`${n} Sterne`}
           >
-            <StarMark icon={icon} colorClass={colorClass} filled={n <= value} />
+            <StarMark icon={icon} filled={n <= value} />
           </button>
         ))}
       </div>
@@ -92,18 +126,29 @@ export function Rating({
   return (
     <div className="flex items-center justify-between py-1.5">
       <span className="text-sm text-ink-soft">{label}</span>
-      <div className="flex" role="radiogroup" aria-label={label}>
-        {[1, 2, 3, 4, 5].map((score) => (
-          <button
-            key={score}
-            onClick={() => onChange(score === value ? 0 : score)}
-            className="flex h-9 w-9 items-center justify-center transition-transform active:scale-90"
-            aria-label={`${label}: ${score}`}
-            aria-pressed={score <= value}
-          >
-            <StarMark icon={icon} colorClass={colorClass} filled={score <= value} />
-          </button>
-        ))}
+      <div className={colorClass}>
+        <RatingMarks value={value} onChange={onChange} icon={icon} label={label} />
+      </div>
+    </div>
+  );
+}
+
+export function ReadonlyRating({
+  label,
+  value,
+  colorClass = "text-gold",
+  icon,
+}: {
+  label: string;
+  value: number;
+  colorClass?: string;
+  icon?: StarIconSrc;
+}) {
+  return (
+    <div className="flex items-center justify-between py-1.5">
+      <span className="text-sm text-ink-soft">{label}</span>
+      <div aria-label={`${label}: ${value} von 5`} title={`${label}: ${value} von 5`} className={colorClass}>
+        <RatingMarks value={value} icon={icon} label={label} />
       </div>
     </div>
   );

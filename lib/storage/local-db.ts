@@ -1,68 +1,149 @@
-import { get, set } from "idb-keyval";
+"use client";
+
+import { clear, createStore, del, entries, get, set } from "idb-keyval";
 import type { EntryRecord, KvMutation, PatienceRecord, PendingQueue } from "./types";
 
-// Alles liegt in IndexedDB (idb-keyval), damit die App auch ohne Verbindung
-// vollstaendig lesbar/beschreibbar bleibt. Sync gleicht das nur im Hintergrund ab.
-const KV_KEY = "tilly:kv";
-const ENTRIES_KEY = "tilly:entries";
-const PATIENCE_KEY = "tilly:patience";
-const QUEUE_KEY = "tilly:queue";
-const META_KEY = "tilly:meta";
+type Meta = { lastSyncedAt: number };
+
+const DB_NAME = "tilly-tracker";
+const KV_STORE = createStore(DB_NAME, "kv");
+const ENTRIES_STORE = createStore(DB_NAME, "entries");
+const PATIENCE_STORE = createStore(DB_NAME, "patience");
+const QUEUE_KV_STORE = createStore(DB_NAME, "queue-kv");
+const QUEUE_ENTRIES_STORE = createStore(DB_NAME, "queue-entries");
+const QUEUE_PATIENCE_STORE = createStore(DB_NAME, "queue-patience");
+const META_STORE = createStore(DB_NAME, "meta");
+const META_KEY = "meta";
 
 type KvMap = Record<string, KvMutation>;
 type EntriesMap = Record<string, EntryRecord>;
-type PatienceMap = Record<string, PatienceRecord>; // Schluessel: `${userEmail}:${date}`
-type Meta = { lastSyncedAt: number };
+type PatienceMap = Record<string, PatienceRecord>;
 
 function emptyQueue(): PendingQueue {
   return { kv: [], entries: [], dailyPatience: [] };
 }
 
-async function readMap<T>(key: string): Promise<Record<string, T>> {
-  return (await get(key)) || {};
+function toRecord<T>(rows: [IDBValidKey, T][]): Record<string, T> {
+  return Object.fromEntries(rows.map(([key, value]) => [String(key), value]));
+}
+
+function patienceKey(userEmail: string, date: string) {
+  return `${userEmail}:${date}`;
+}
+
+function matchesSnapshot<T>(current: T | undefined, snapshot: T) {
+  return JSON.stringify(current) === JSON.stringify(snapshot);
+}
+
+async function readQueue(): Promise<PendingQueue> {
+  const [kv, entryRows, dailyPatience] = await Promise.all([
+    entries<KvMutation>(QUEUE_KV_STORE),
+    entries<EntryRecord>(QUEUE_ENTRIES_STORE),
+    entries<PatienceRecord>(QUEUE_PATIENCE_STORE),
+  ]);
+
+  return {
+    kv: kv.map(([, row]) => row),
+    entries: entryRows.map(([, row]) => row),
+    dailyPatience: dailyPatience.map(([, row]) => row),
+  };
+}
+
+async function clearStores() {
+  await Promise.all([
+    clear(KV_STORE),
+    clear(ENTRIES_STORE),
+    clear(PATIENCE_STORE),
+    clear(QUEUE_KV_STORE),
+    clear(QUEUE_ENTRIES_STORE),
+    clear(QUEUE_PATIENCE_STORE),
+    clear(META_STORE),
+  ]);
 }
 
 export const localDb = {
+  async clearAll() {
+    await clearStores();
+  },
+
   async getAllKv(): Promise<KvMap> {
-    return readMap<KvMutation>(KV_KEY);
+    return toRecord(await entries<KvMutation>(KV_STORE));
   },
   async putKv(row: KvMutation) {
-    const map = await readMap<KvMutation>(KV_KEY);
-    map[row.key] = row;
-    await set(KV_KEY, map);
+    await set(row.key, row, KV_STORE);
   },
 
   async getAllEntries(): Promise<EntriesMap> {
-    return readMap<EntryRecord>(ENTRIES_KEY);
+    return toRecord(await entries<EntryRecord>(ENTRIES_STORE));
+  },
+  async getEntry(id: string): Promise<EntryRecord | undefined> {
+    return (await get<EntryRecord>(id, ENTRIES_STORE)) ?? undefined;
   },
   async putEntry(row: EntryRecord) {
-    const map = await readMap<EntryRecord>(ENTRIES_KEY);
-    map[row.id] = row;
-    await set(ENTRIES_KEY, map);
+    await set(row.id, row, ENTRIES_STORE);
   },
 
   async getAllPatience(): Promise<PatienceMap> {
-    return readMap<PatienceRecord>(PATIENCE_KEY);
+    return toRecord(await entries<PatienceRecord>(PATIENCE_STORE));
   },
   async putPatience(row: PatienceRecord) {
-    const map = await readMap<PatienceRecord>(PATIENCE_KEY);
-    map[`${row.userEmail}:${row.date}`] = row;
-    await set(PATIENCE_KEY, map);
+    await set(patienceKey(row.userEmail, row.date), row, PATIENCE_STORE);
+  },
+  async listPatience(date: string): Promise<PatienceRecord[]> {
+    const rows = await entries<PatienceRecord>(PATIENCE_STORE);
+    return rows.map(([, row]) => row).filter((row) => row.date === date);
   },
 
+  async enqueueKv(row: KvMutation) {
+    await set(row.key, row, QUEUE_KV_STORE);
+  },
+  async enqueueEntry(row: EntryRecord) {
+    await set(row.id, row, QUEUE_ENTRIES_STORE);
+  },
+  async enqueuePatience(row: PatienceRecord) {
+    await set(patienceKey(row.userEmail, row.date), row, QUEUE_PATIENCE_STORE);
+  },
   async getQueue(): Promise<PendingQueue> {
-    // Immer ein frisches Objekt zurueckgeben - sonst wuerde ein geteiltes Literal
-    // ueber mehrere Aufrufe hinweg in-place mutiert (z.B. durch enqueue()).
-    return (await get(QUEUE_KEY)) || emptyQueue();
+    return readQueue();
+  },
+  async getQueueForUser(userEmail: string | null): Promise<PendingQueue> {
+    const queue = await readQueue();
+    return {
+      kv: queue.kv,
+      entries: queue.entries,
+      dailyPatience: userEmail ? queue.dailyPatience.filter((row) => row.userEmail === userEmail) : [],
+    };
   },
   async setQueue(queue: PendingQueue) {
-    await set(QUEUE_KEY, queue);
+    await Promise.all([clear(QUEUE_KV_STORE), clear(QUEUE_ENTRIES_STORE), clear(QUEUE_PATIENCE_STORE)]);
+    await Promise.all([
+      ...queue.kv.map((row) => set(row.key, row, QUEUE_KV_STORE)),
+      ...queue.entries.map((row) => set(row.id, row, QUEUE_ENTRIES_STORE)),
+      ...queue.dailyPatience.map((row) => set(patienceKey(row.userEmail, row.date), row, QUEUE_PATIENCE_STORE)),
+    ]);
+  },
+  async acknowledgeQueue(queue: PendingQueue) {
+    await Promise.all([
+      ...queue.kv.map(async (row) => {
+        const current = await get<KvMutation>(row.key, QUEUE_KV_STORE);
+        if (matchesSnapshot(current ?? undefined, row)) await del(row.key, QUEUE_KV_STORE);
+      }),
+      ...queue.entries.map(async (row) => {
+        const current = await get<EntryRecord>(row.id, QUEUE_ENTRIES_STORE);
+        if (matchesSnapshot(current ?? undefined, row)) await del(row.id, QUEUE_ENTRIES_STORE);
+      }),
+      ...queue.dailyPatience.map(async (row) => {
+        const key = patienceKey(row.userEmail, row.date);
+        const current = await get<PatienceRecord>(key, QUEUE_PATIENCE_STORE);
+        if (matchesSnapshot(current ?? undefined, row)) await del(key, QUEUE_PATIENCE_STORE);
+      }),
+    ]);
   },
 
   async getMeta(): Promise<Meta> {
-    return (await get(META_KEY)) || { lastSyncedAt: 0 };
+    return (await get<Meta>(META_KEY, META_STORE)) || { lastSyncedAt: 0 };
   },
   async setMeta(meta: Meta) {
-    await set(META_KEY, meta);
+    await set(META_KEY, meta, META_STORE);
   },
 };
