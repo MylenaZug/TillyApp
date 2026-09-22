@@ -30,10 +30,10 @@ function WeekdayChart({ entriesList, color, unitLabel }: { entriesList: AnyEntry
       <div className="mb-2 text-[11px] uppercase tracking-wide text-ink-soft">Nach Wochentag</div>
       <div style={{ height: 140 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+          <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <CartesianGrid stroke={HAIRLINE} vertical={false} />
             <XAxis dataKey="day" tick={{ fontSize: 11, fill: INK_SOFT }} axisLine={false} tickLine={false} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: INK_SOFT }} axisLine={false} tickLine={false} width={22} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: INK_SOFT }} axisLine={false} tickLine={false} width={28} />
             <Tooltip contentStyle={{ borderRadius: 10, border: `1px solid ${HAIRLINE}`, fontSize: 12 }} />
             <Bar dataKey="Anzahl" radius={[5, 5, 0, 0]} fill={color} />
           </BarChart>
@@ -212,11 +212,11 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
                   data={[...stressEntries]
                     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                     .map((e) => ({ date: fmtDate(e.date), level: Math.min(3, e.level || 0) }))}
-                  margin={{ top: 6, right: 6, left: -24, bottom: 0 }}
+                  margin={{ top: 6, right: 6, left: 0, bottom: 0 }}
                 >
                   <CartesianGrid stroke={HAIRLINE} vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: INK_SOFT }} axisLine={false} tickLine={false} />
-                  <YAxis domain={[0, 3]} allowDecimals={false} tick={{ fontSize: 10, fill: INK_SOFT }} axisLine={false} tickLine={false} width={22} />
+                  <YAxis domain={[0, 3]} allowDecimals={false} tick={{ fontSize: 10, fill: INK_SOFT }} axisLine={false} tickLine={false} width={24} />
                   <Tooltip contentStyle={{ borderRadius: 10, border: `1px solid ${HAIRLINE}`, fontSize: 12 }} />
                   <Line type="monotone" dataKey="level" stroke={catMeta("stress").hex} strokeWidth={2.5} dot={{ r: 3, fill: catMeta("stress").hex }} />
                 </LineChart>
@@ -237,10 +237,10 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
         ) : (
           <div style={{ height: 160 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={weightChartData} margin={{ top: 6, right: 6, left: -20, bottom: 0 }}>
+              <LineChart data={weightChartData} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke={HAIRLINE} vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: INK_SOFT }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: INK_SOFT }} axisLine={false} tickLine={false} width={30} />
+                <YAxis tick={{ fontSize: 10, fill: INK_SOFT }} axisLine={false} tickLine={false} width={34} />
                 <Tooltip contentStyle={{ borderRadius: 10, border: `1px solid ${HAIRLINE}`, fontSize: 12 }} />
                 <Line type="monotone" dataKey="kg" stroke={catMeta("weight").hex} strokeWidth={2.5} dot={{ r: 3, fill: catMeta("weight").hex }} />
               </LineChart>
