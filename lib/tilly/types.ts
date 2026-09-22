@@ -24,7 +24,7 @@ export type VetData = BaseEntryData & { reason: string };
 export type SymptomData = BaseEntryData & { category: string };
 export type StressData = BaseEntryData & { level: number };
 export type KostenData = BaseEntryData & { category: string; amount: number };
-export type TagescheckData = BaseEntryData & { folgsamkeit: number; energie: number };
+export type TagescheckData = BaseEntryData & { folgsamkeit: number; energie: number; geduld?: number };
 
 export type EntryDataByType = {
   food: FoodData;

@@ -1,4 +1,4 @@
-import withPWA from "@ducanh2912/next-pwa";
+import withPWA, { runtimeCaching } from "@ducanh2912/next-pwa";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -11,7 +11,13 @@ export default withPWA({
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
   workboxOptions: {
-    // Sync-Eintraege laufen ueber die eigene Storage-Engine, nicht ueber den SW-Cache.
-    exclude: [/^\/api\//],
+    runtimeCaching: [
+      {
+        urlPattern: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith("/api/"),
+        handler: "NetworkOnly",
+      },
+      ...runtimeCaching.filter((entry) => entry.options?.cacheName !== "apis"),
+    ],
   },
+  extendDefaultRuntimeCaching: false,
 })(nextConfig);

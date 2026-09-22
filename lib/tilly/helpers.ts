@@ -142,8 +142,12 @@ export function entrySummary(entry: AnyEntry): string {
       case "kosten":
         if (entry.amount === undefined || Number.isNaN(Number(entry.amount))) return "Eintrag gespeichert";
         return `${entry.category} · ${Number(entry.amount).toFixed(2)} €`;
-      case "tagescheck":
-        return `Folgsamkeit ${starGlyphs(entry.folgsamkeit)} · Sharklevel ${starGlyphs(entry.energie)}`;
+      case "tagescheck": {
+        const parts = [`Folgsamkeit ${starGlyphs(entry.folgsamkeit)}`];
+        if (entry.geduld !== undefined) parts.push(`Geduld ${starGlyphs(entry.geduld)}`);
+        parts.push(`Sharklevel ${starGlyphs(entry.energie)}`);
+        return parts.join(" · ");
+      }
       default:
         return "Eintrag gespeichert";
     }
