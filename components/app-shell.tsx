@@ -367,6 +367,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         {view === "exercises" && (
           <ExercisesView
             exercises={exercises}
+            entries={entries}
             onSave={(ex) => void saveExercise(ex)}
             onDelete={(id) => void deleteExercise(id)}
             onReorder={(next) => void reorderExercises(next)}
@@ -400,13 +401,15 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             <div className="w-11 shrink-0" />
             <NavButton icon={BarChart3} label="Auswertung" active={view === "analysis"} onClick={() => setView("analysis")} />
           </div>
-          <button
-            onClick={() => setPickerOpen(true)}
-            className="absolute -top-5 left-1/2 flex h-14 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-ink shadow-lg transition-transform active:scale-95"
-            aria-label="Neuer Eintrag"
-          >
-            <Plus size={26} className="text-white" />
-          </button>
+          {view !== "home" && (
+            <button
+              onClick={() => setPickerOpen(true)}
+              className="absolute -top-5 left-1/2 flex h-14 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-ink shadow-lg transition-transform active:scale-95"
+              aria-label="Neuer Eintrag"
+            >
+              <Plus size={26} className="text-white" />
+            </button>
+          )}
         </div>
       )}
 
