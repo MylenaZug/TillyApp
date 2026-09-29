@@ -119,9 +119,11 @@ export function dateKey(d: Date | string) {
 export function entrySummary(entry: AnyEntry): string {
   try {
     switch (entry.type) {
-      case "stool":
-        if (!entry.consistency) return "Eintrag gespeichert";
-        return `${entry.consistency}${entry.stoolAmount ? " · " + entry.stoolAmount : ""}${entry.color ? " · " + entry.color : ""}`;
+      case "stool": {
+        const consistency = Array.isArray(entry.consistency) ? entry.consistency : entry.consistency ? [entry.consistency] : [];
+        if (consistency.length === 0) return "Eintrag gespeichert";
+        return `${consistency.join(", ")}${entry.stoolAmount ? " · " + entry.stoolAmount : ""}${entry.color ? " · " + entry.color : ""}`;
+      }
       case "training":
         if (!entry.activity) return "Eintrag gespeichert";
         return entry.activity;
@@ -130,7 +132,7 @@ export function entrySummary(entry: AnyEntry): string {
         return `${entry.kg} kg${entry.daytime ? " · " + entry.daytime : ""}`;
       case "food":
         if (!entry.food) return "Eintrag gespeichert";
-        return `${entry.food}${entry.amount ? " · " + entry.amount + " g" : ""}`;
+        return `${entry.food}${entry.amount ? " · " + entry.amount + " " + (entry.amountUnit || "Gramm") : ""}`;
       case "vet":
         return `${entry.reason || "Termin"}`;
       case "symptom":

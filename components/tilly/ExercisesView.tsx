@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { BookOpen, ChevronDown, GripVertical, Pencil, Plus, Target, Trash2, X } from "lucide-react";
 import { MASTERY_LABELS } from "@/lib/tilly/constants";
-import { starGlyphs, uid } from "@/lib/tilly/helpers";
-import type { Exercise } from "@/lib/tilly/types";
+import { dayLabel, starGlyphs, uid } from "@/lib/tilly/helpers";
+import type { AnyEntry, Exercise } from "@/lib/tilly/types";
 import { FieldLabel, PrimaryButton, StarRow, TextArea, TextInput } from "./ui";
 
 function ExerciseField({ label, value }: { label: string; value: string }) {
@@ -106,11 +106,13 @@ function ExerciseForm({
 
 export function ExercisesView({
   exercises,
+  entries,
   onSave,
   onDelete,
   onReorder,
 }: {
   exercises: Exercise[];
+  entries: AnyEntry[];
   onSave: (exercise: Exercise) => void;
   onDelete: (id: string) => void;
   onReorder: (next: Exercise[]) => void;
@@ -125,6 +127,13 @@ export function ExercisesView({
   // Immer nach Sternchen sortiert (wenig oben, viel unten). Bei gleicher Sternezahl
   // entscheidet die Position im Array - genau die, die man per Ziehen veraendert.
   const sorted = [...exercises].sort((a, b) => (a.masteryLevel || 0) - (b.masteryLevel || 0));
+
+  // Trainingseintraege werden ueber den Freitext-Namen ("activity") mit der Uebung
+  // verknuepft - derselbe Name, der auch als Schnellauswahl im Trainings-Formular steht.
+  const trainingSessionsFor = (name: string) =>
+    entries
+      .filter((e) => e.type === "training" && e.activity === name)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   useEffect(() => {
     if (!dragId) return;
@@ -221,6 +230,8 @@ export function ExercisesView({
             const open = openId === ex.id;
             const isDragging = dragId === ex.id;
             const isOver = overId === ex.id && !!dragId && dragId !== ex.id;
+            const sessions = trainingSessionsFor(ex.name);
+            const lastSession = sessions[0];
             return (
               <div
                 key={ex.id}
@@ -252,6 +263,9 @@ export function ExercisesView({
                         <div className="flex items-center tracking-widest">
                           <span className="text-[11px] text-gold">{starGlyphs(ex.masteryLevel)}</span>
                         </div>
+                        <div className="truncate text-[11px] text-ink-soft">
+                          {lastSession ? `Zuletzt trainiert: ${dayLabel(lastSession.date)}` : "Noch nicht trainiert"}
+                        </div>
                       </div>
                     </div>
                     <ChevronDown
@@ -267,6 +281,23 @@ export function ExercisesView({
                     {ex.handSignal && <ExerciseField label="Handzeichen" value={ex.handSignal} />}
                     {ex.goal && <ExerciseField label="Was soll Tilly tun?" value={ex.goal} />}
                     {ex.notes && <ExerciseField label="Notizen" value={ex.notes} />}
+                    {sessions.length > 0 && (
+                      <div>
+                        <div className="mb-0.5 text-[11px] uppercase tracking-wide text-ink-soft">
+                          Training-Verlauf ({sessions.length}×)
+                        </div>
+                        <div className="space-y-1">
+                          {sessions.slice(0, 5).map((s) => (
+                            <div key={s.id} className="flex items-center justify-between text-[13px] text-ink">
+                              <span className="text-ink-soft">{dayLabel(s.date)}</span>
+                              <span className="tracking-widest text-gold" title="Tilly">
+                                {starGlyphs(s.dogStars)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <button
                       onClick={() => {
                         setEditing(ex);

@@ -12,14 +12,20 @@ export type CategoryId =
 type BaseEntryData = { date: string; note?: string };
 
 export type StoolData = BaseEntryData & {
-  consistency: string;
+  consistency: string[];
   stoolAmount: string;
   color: string;
   flags: string[];
 };
 export type TrainingData = BaseEntryData & { activity: string; dogStars: number; trainerStars: number };
 export type WeightData = BaseEntryData & { kg: number; daytime: string };
-export type FoodData = BaseEntryData & { food: string; amount?: number };
+export type FoodData = BaseEntryData & { food: string; amount?: number; amountUnit?: string; daytime?: string };
+
+// Fester Futterplan pro Tageszeit (Morgens/Mittags/Abends, siehe DAYTIME_OPTIONS) - fuer
+// alles, was nicht ins Schema passt, gibt es weiterhin das freie Notizfeld im Storage
+// unter dem kv-Key "food-plan".
+export type FoodPlanSlot = { food: string; amount?: number; amountUnit?: string };
+export type FoodPlanSlots = Record<string, FoodPlanSlot>;
 export type VetData = BaseEntryData & { reason: string };
 export type SymptomData = BaseEntryData & { category: string };
 export type StressData = BaseEntryData & { level: number };
