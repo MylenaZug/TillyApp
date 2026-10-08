@@ -87,6 +87,38 @@ export function starGlyphs(n?: number) {
   return "★".repeat(count) + "☆".repeat(5 - count);
 }
 
+export function formatDuration(ms: number): string {
+  const totalMinutes = Math.max(0, Math.floor(ms / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes} Min`;
+  return `${hours} Std ${minutes} Min`;
+}
+
+// Gewicht schwankt ueber den Tag - fuer einen fairen Vergleich wird nach Moeglichkeit
+// der letzte Eintrag mit derselben Tageszeit herangezogen, nicht einfach der letzte
+// ueberhaupt. `previousWeightEntries` erwartet bereits auf type "weight" gefilterte und
+// den neuen Eintrag selbst ausschliessende Eintraege.
+export function weightFeedback(kg: number, daytime: string | undefined, previousWeightEntries: AnyEntry[]): string {
+  if (previousWeightEntries.length === 0) return "Erster Gewichts-Eintrag gespeichert ✓";
+
+  const sorted = [...previousWeightEntries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sameDaytime = daytime ? sorted.find((e) => e.daytime === daytime) : undefined;
+  const reference = sameDaytime || sorted[0];
+  const delta = kg - (Number(reference.kg) || 0);
+
+  const trend =
+    Math.abs(delta) < 0.05
+      ? "Gewicht unverändert"
+      : delta > 0
+        ? `${delta.toFixed(1)} kg zugenommen`
+        : `${Math.abs(delta).toFixed(1)} kg abgenommen`;
+
+  const refLabel = reference.daytime ? `${reference.daytime}, ${fmtDate(reference.date)}` : fmtDate(reference.date);
+  const comparableNote = sameDaytime ? "" : " · andere Tageszeit, bedingt vergleichbar";
+  return `${trend} seit ${refLabel}${comparableNote}`;
+}
+
 export function nowLocalISO() {
   const d = new Date();
   d.setSeconds(0, 0);
@@ -146,6 +178,9 @@ export function entrySummary(entry: AnyEntry): string {
         return `${entry.category} · ${Number(entry.amount).toFixed(2)} €`;
       case "tagescheck":
         return `Folgsamkeit ${starGlyphs(entry.folgsamkeit)} · Sharklevel ${starGlyphs(entry.energie)}`;
+      case "alone":
+        if (!entry.ms || !entry.startedAt || !entry.endedAt) return "Eintrag gespeichert";
+        return `${formatDuration(entry.ms)} (${fmtTime(entry.startedAt)}–${fmtTime(entry.endedAt)})`;
       default:
         return "Eintrag gespeichert";
     }

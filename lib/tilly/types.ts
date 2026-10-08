@@ -7,7 +7,8 @@ export type CategoryId =
   | "weight"
   | "vet"
   | "kosten"
-  | "tagescheck";
+  | "tagescheck"
+  | "alone";
 
 type BaseEntryData = { date: string; note?: string };
 
@@ -31,6 +32,9 @@ export type SymptomData = BaseEntryData & { category: string };
 export type StressData = BaseEntryData & { level: number };
 export type KostenData = BaseEntryData & { category: string; amount: number };
 export type TagescheckData = BaseEntryData & { folgsamkeit: number; energie: number };
+// `date` = endedAt (fuer konsistente Sortierung in Verlauf/Kalender); Start/Ende getrennt
+// gespeichert, damit die Anzeige den Zeitraum zeigen kann.
+export type AloneData = BaseEntryData & { startedAt: string; endedAt: string; ms: number };
 
 export type EntryDataByType = {
   food: FoodData;
@@ -42,6 +46,7 @@ export type EntryDataByType = {
   vet: VetData;
   kosten: KostenData;
   tagescheck: TagescheckData;
+  alone: AloneData;
 };
 
 // Flache Sicht auf einen Eintrag (wie im alten Firebase-Prototyp): id/type/updatedAt
@@ -50,7 +55,7 @@ export type AnyEntry = {
   id: string;
   type: CategoryId;
   updatedAt: number;
-} & Partial<StoolData & TrainingData & WeightData & FoodData & VetData & SymptomData & StressData & KostenData & TagescheckData> & {
+} & Partial<StoolData & TrainingData & WeightData & FoodData & VetData & SymptomData & StressData & KostenData & TagescheckData & AloneData> & {
     date: string;
   };
 

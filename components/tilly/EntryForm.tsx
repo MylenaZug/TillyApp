@@ -166,7 +166,14 @@ export function EntryForm({
               <FieldLabel>Konsistenz</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {STOOL_CONSISTENCY.map((c) => (
-                  <Chip key={c} active={consistency.includes(c)} onClick={() => toggleConsistency(c)} colorClass={meta.text} activeBgClass={meta.bg}>
+                  <Chip
+                    key={c}
+                    active={consistency.includes(c)}
+                    onClick={() => toggleConsistency(c)}
+                    colorClass={meta.text}
+                    activeBgClass={meta.bg}
+                    activeTextClass={meta.activeText}
+                  >
                     {c}
                   </Chip>
                 ))}
@@ -176,7 +183,14 @@ export function EntryForm({
               <FieldLabel>Menge</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {STOOL_AMOUNTS.map((a) => (
-                  <Chip key={a} active={stoolAmount === a} onClick={() => setStoolAmount(a)} colorClass={meta.text} activeBgClass={meta.bg}>
+                  <Chip
+                    key={a}
+                    active={stoolAmount === a}
+                    onClick={() => setStoolAmount(a)}
+                    colorClass={meta.text}
+                    activeBgClass={meta.bg}
+                    activeTextClass={meta.activeText}
+                  >
                     {a}
                   </Chip>
                 ))}
@@ -193,7 +207,14 @@ export function EntryForm({
               {combinedTrainingTypes.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {combinedTrainingTypes.map((t) => (
-                    <Chip key={t} active={activity === t} onClick={() => setActivity(t)} colorClass={meta.text} activeBgClass={meta.bg}>
+                    <Chip
+                      key={t}
+                      active={activity === t}
+                      onClick={() => setActivity(t)}
+                      colorClass={meta.text}
+                      activeBgClass={meta.bg}
+                      activeTextClass={meta.activeText}
+                    >
                       {t}
                     </Chip>
                   ))}
@@ -218,7 +239,14 @@ export function EntryForm({
               <FieldLabel>Tageszeit</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {DAYTIME_OPTIONS.map((d) => (
-                  <Chip key={d} active={daytime === d} onClick={() => setDaytime(d)} colorClass={meta.text} activeBgClass={meta.bg}>
+                  <Chip
+                    key={d}
+                    active={daytime === d}
+                    onClick={() => setDaytime(d)}
+                    colorClass={meta.text}
+                    activeBgClass={meta.bg}
+                    activeTextClass={meta.activeText}
+                  >
                     {d}
                   </Chip>
                 ))}
@@ -235,7 +263,14 @@ export function EntryForm({
               {foodTypes.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {foodTypes.slice(0, 8).map((t) => (
-                    <Chip key={t} active={food === t} onClick={() => setFood(t)} colorClass={meta.text} activeBgClass={meta.bg}>
+                    <Chip
+                      key={t}
+                      active={food === t}
+                      onClick={() => setFood(t)}
+                      colorClass={meta.text}
+                      activeBgClass={meta.bg}
+                      activeTextClass={meta.activeText}
+                    >
                       {t}
                     </Chip>
                   ))}
@@ -246,7 +281,14 @@ export function EntryForm({
               <FieldLabel>Menge</FieldLabel>
               <div className="mb-2 flex flex-wrap gap-2">
                 {FOOD_AMOUNT_UNITS.map((u) => (
-                  <Chip key={u} active={amountUnit === u} onClick={() => setAmountUnit(u)} colorClass={meta.text} activeBgClass={meta.bg}>
+                  <Chip
+                    key={u}
+                    active={amountUnit === u}
+                    onClick={() => setAmountUnit(u)}
+                    colorClass={meta.text}
+                    activeBgClass={meta.bg}
+                    activeTextClass={meta.activeText}
+                  >
                     {u}
                   </Chip>
                 ))}
@@ -274,6 +316,7 @@ export function EntryForm({
                     onClick={() => setFoodDaytime((cur) => (cur === d ? "" : d))}
                     colorClass={meta.text}
                     activeBgClass={meta.bg}
+                    activeTextClass={meta.activeText}
                   >
                     {d}
                   </Chip>
@@ -324,6 +367,7 @@ export function EntryForm({
                             onClick={() => updateFoodPlanSlot(d, { amountUnit: u })}
                             colorClass={meta.text}
                             activeBgClass={meta.bg}
+                            activeTextClass={meta.activeText}
                           >
                             {u}
                           </Chip>
@@ -416,7 +460,14 @@ export function EntryForm({
               <FieldLabel>Wofür?</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {KOSTEN_CATEGORIES.map((c) => (
-                  <Chip key={c} active={kostenCategory === c} onClick={() => setKostenCategory(c)} colorClass={meta.text} activeBgClass={meta.bg}>
+                  <Chip
+                    key={c}
+                    active={kostenCategory === c}
+                    onClick={() => setKostenCategory(c)}
+                    colorClass={meta.text}
+                    activeBgClass={meta.bg}
+                    activeTextClass={meta.activeText}
+                  >
                     {c}
                   </Chip>
                 ))}
@@ -490,7 +541,7 @@ export function EntryForm({
         )}
 
         <div className="space-y-2 pt-2">
-          <PrimaryButton onClick={handleSave} disabled={!canSave} bgClass={meta.bg}>
+          <PrimaryButton onClick={handleSave} disabled={!canSave} bgClass={meta.bg} textClass={meta.activeText}>
             {existing ? "Änderungen speichern" : "Eintrag speichern"}
           </PrimaryButton>
           {existing && onDelete && (

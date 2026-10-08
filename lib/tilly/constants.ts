@@ -25,15 +25,17 @@ export const CATEGORIES: CategoryMeta[] = [
   { id: "training", label: "Training", icon: ICON("category-training"), text: "text-gold", bg: "bg-gold", border: "border-gold", soft: "bg-gold-soft", hex: "#2E8B57", hexSoft: "#DCEEE2" },
   { id: "stress", label: "Stress", icon: ICON("category-stress"), text: "text-amber", bg: "bg-amber", border: "border-amber", soft: "bg-amber-soft", hex: "#3457D5", hexSoft: "#DCE3F8" },
   { id: "symptom", label: "Auffälligkeit", icon: ICON("category-symptom"), text: "text-berry", bg: "bg-berry", border: "border-berry", soft: "bg-berry-soft", hex: "#E6B800", hexSoft: "#FBF0C9", activeText: "text-ink" },
-  { id: "weight", label: "Gewicht", icon: ICON("category-weight"), text: "text-teal", bg: "bg-teal", border: "border-teal", soft: "bg-teal-soft", hex: "#B8860B", hexSoft: "#F3E7C9" },
+  { id: "weight", label: "Gewicht", icon: ICON("category-weight"), text: "text-teal", bg: "bg-teal", border: "border-teal", soft: "bg-teal-soft", hex: "#B8860B", hexSoft: "#F3E7C9", activeText: "text-ink" },
   { id: "vet", label: "Tierarzt", icon: ICON("category-vet"), text: "text-plum", bg: "bg-plum", border: "border-plum", soft: "bg-plum-soft", hex: "#7A5C8E", hexSoft: "#EAE3F0" },
   { id: "kosten", label: "Kosten", icon: ICON("category-kosten"), text: "text-slate", bg: "bg-slate", border: "border-slate", soft: "bg-slate-soft", hex: "#546A7B", hexSoft: "#DCE4E8" },
   { id: "tagescheck", label: "Tagescheck", icon: ICON("extra-health"), text: "text-rose", bg: "bg-rose", border: "border-rose", soft: "bg-rose-soft", hex: "#B5537A", hexSoft: "#F3DCE6" },
+  { id: "alone", label: "Tilly allein zu Haus", icon: ICON("extra-home"), text: "text-plum", bg: "bg-plum", border: "border-plum", soft: "bg-plum-soft", hex: "#7A5C8E", hexSoft: "#EAE3F0" },
 ];
 
-// Tagescheck wird ausschliesslich ueber die "Heute"-Karte gepflegt, taucht daher nicht
-// als eigene Kachel im "+"-Menue bzw. auf dem Startbildschirm auf.
-export const ADDABLE_CATEGORIES = CATEGORIES.filter((c) => c.id !== "tagescheck");
+// Tagescheck wird ausschliesslich ueber die "Heute"-Karte gepflegt, "Alleine" ueber die
+// Start/Stop-Karte - beide tauchen daher nicht als eigene Kachel im "+"-Menue bzw. auf
+// dem Startbildschirm auf.
+export const ADDABLE_CATEGORIES = CATEGORIES.filter((c) => c.id !== "tagescheck" && c.id !== "alone");
 
 export const catMeta = (id: string): CategoryMeta => CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[0];
 

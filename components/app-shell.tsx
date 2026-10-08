@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, BookOpen, Clock3, Home, Plus, RotateCcw, X } from "lucide-react";
+import { BarChart3, BookOpen, Clock3, Home, Plus, X } from "lucide-react";
 import {
   deleteEntry,
   getKv,
@@ -14,7 +14,7 @@ import {
 import { useSyncStatus, type SyncStatus } from "@/lib/storage/useSyncStatus";
 import type { EntryRecord } from "@/lib/storage/types";
 import { ADDABLE_CATEGORIES, SYMPTOM_CATEGORIES, catMeta } from "@/lib/tilly/constants";
-import { daysAgo, dateKey, nowLocalISO, tillyAge } from "@/lib/tilly/helpers";
+import { daysAgo, dateKey, formatDuration, nowLocalISO, tillyAge, weightFeedback } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, PawTrailLoader, PrimaryButton } from "@/components/tilly/ui";
 import { HomeView } from "@/components/tilly/HomeView";
@@ -82,12 +82,12 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const foodPlanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const foodPlanSlotsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [patience, setPatience] = useState(0);
+  const [aloneStart, setAloneStart] = useState<string | null>(null);
 
   const [view, setView] = useState<View>("home");
   const [addCategory, setAddCategory] = useState<CategoryId | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<CategoryId | "all">("all");
   const [toast, setToast] = useState("");
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,7 +103,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   useEffect(() => {
     (async () => {
       try {
-        const [t, f, s, ex, gn, fp, fps] = await Promise.all([
+        const [t, f, s, ex, gn, fp, fps, as] = await Promise.all([
           getKv("training-types"),
           getKv("food-types"),
           getKv("symptom-types"),
@@ -111,6 +111,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           getKv("general-note"),
           getKv("food-plan"),
           getKv("food-plan-slots"),
+          getKv("alone-start"),
         ]);
         if (t) setTrainingTypes(JSON.parse(t));
         if (f) setFoodTypes(JSON.parse(f));
@@ -118,6 +119,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         if (gn) setGeneralNote(gn);
         if (fp) setFoodPlan(fp);
         if (fps) setFoodPlanSlots(JSON.parse(fps));
+        if (as) setAloneStart(as);
         // Standanduebungen kommen als DB-Seed (siehe db/seed.ts) bereits befuellt aus dem
         // kv_store - hier nur noch laden, kein Runtime-Merge/Seed im Client mehr noetig.
         if (ex) setExercises(JSON.parse(ex));
@@ -133,7 +135,10 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   function showToast(message: string) {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(message);
-    toastTimerRef.current = setTimeout(() => setToast(""), 2200);
+    // Laengere Rueckmeldungen (z.B. der Gewichts-Vergleich) brauchen mehr Lesezeit als ein
+    // kurzes "X gespeichert ✓".
+    const duration = message.length > 30 ? 4200 : 2200;
+    toastTimerRef.current = setTimeout(() => setToast(""), duration);
   }
 
   function openAdd(catId: CategoryId, existing?: AnyEntry) {
@@ -176,8 +181,17 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       void setKv("symptom-types", JSON.stringify(next));
     }
 
+    const weightMessage =
+      addCategory === "weight" && typeof data.kg === "number" && !Number.isNaN(data.kg)
+        ? weightFeedback(
+            data.kg,
+            typeof data.daytime === "string" ? data.daytime : undefined,
+            entries.filter((e) => e.type === "weight" && e.id !== editingId),
+          )
+        : null;
+
     await refresh();
-    showToast(`${catMeta(addCategory).label} ${isNew ? "gespeichert" : "aktualisiert"} ✓`);
+    showToast(weightMessage ?? `${catMeta(addCategory).label} ${isNew ? "gespeichert" : "aktualisiert"} ✓`);
     closeForm();
   }
 
@@ -263,6 +277,23 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     showToast(`${catMeta("food").label} gespeichert ✓`);
   }
 
+  async function startAloneTimer() {
+    const iso = nowLocalISO();
+    setAloneStart(iso);
+    await setKv("alone-start", iso);
+  }
+
+  async function stopAloneTimer() {
+    if (!aloneStart) return;
+    const endedAt = nowLocalISO();
+    const ms = new Date(endedAt).getTime() - new Date(aloneStart).getTime();
+    setAloneStart(null);
+    await setKv("alone-start", "");
+    await saveEntry(undefined, "alone", { date: endedAt, startedAt: aloneStart, endedAt, ms });
+    await refresh();
+    showToast(`Tilly war ${formatDuration(ms)} allein`);
+  }
+
   async function saveExercise(exercise: Exercise) {
     const exists = exercises.some((e) => e.id === exercise.id);
     const next = exists ? exercises.map((e) => (e.id === exercise.id ? exercise : e)) : [...exercises, exercise];
@@ -279,26 +310,6 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     const next = exercises.filter((e) => e.id !== id);
     setExercises(next);
     await setKv("exercises", JSON.stringify(next));
-  }
-
-  // Setzt nur die erfassten Eintraege sowie die gemerkten Schnellauswahl-Listen zurueck.
-  // Uebungsbibliothek (Name/Handzeichen/Ziel) und allgemeine Notiz bleiben erhalten,
-  // "Meine Geduld" ist persoenlich und wird hier ebenfalls nicht angefasst.
-  async function resetTrackedData() {
-    const resetExercises = exercises.map((e) => ({ ...e, masteryLevel: 0 }));
-    await Promise.all(entries.map((e) => deleteEntry(e.id)));
-    await Promise.all([
-      setKv("training-types", JSON.stringify(DEFAULT_TRAINING_TYPES)),
-      setKv("food-types", JSON.stringify([])),
-      setKv("symptom-types", JSON.stringify([])),
-      setKv("exercises", JSON.stringify(resetExercises)),
-    ]);
-    setTrainingTypes(DEFAULT_TRAINING_TYPES);
-    setFoodTypes([]);
-    setSymptomTypes([]);
-    setExercises(resetExercises);
-    await refresh();
-    setResetConfirmOpen(false);
   }
 
   if (!ready) {
@@ -355,9 +366,11 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             generalNote={generalNote}
             onNoteChange={handleNoteChange}
             noteStatus={noteStatus}
-            onRequestReset={() => setResetConfirmOpen(true)}
             foodPlanSlots={foodPlanSlots}
             onConfirmFoodSlot={(daytime) => void confirmFoodPlanSlot(daytime)}
+            aloneStart={aloneStart}
+            onStartAlone={() => void startAloneTimer()}
+            onStopAlone={() => void stopAloneTimer()}
           />
         )}
         {view === "history" && (
@@ -438,33 +451,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         </div>
       )}
 
-      {resetConfirmOpen && (
-        <div className="absolute inset-0 flex items-end bg-ink/30" onClick={() => setResetConfirmOpen(false)}>
-          <div className="mx-auto w-full max-w-[430px] rounded-t-3xl bg-card p-5 pb-8" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center gap-2">
-              <RotateCcw size={18} className="text-rust" />
-              <div className="font-semibold text-ink">Eingegebene Daten zurücksetzen?</div>
-            </div>
-            <p className="mb-5 text-sm text-ink-soft">
-              Alle Einträge (Futter, Stuhlgang, Training, Stress, Auffälligkeit, Gewicht, Tierarzt, Kosten, Tagescheck) werden unwiderruflich
-              gelöscht. Die Übungsbibliothek (Name, Handzeichen, Ziel) und die allgemeine Notiz bleiben erhalten – nur die Kompetenz-Sterne je Übung
-              werden mit zurückgesetzt. Deine persönliche „Meine Geduld" bleibt ebenfalls erhalten. Das betrifft auch die Daten deines
-              Partners/deiner Partnerin.
-            </p>
-            <div className="space-y-2">
-              <PrimaryButton onClick={() => void resetTrackedData()} bgClass="bg-rust">
-                Ja, alles zurücksetzen
-              </PrimaryButton>
-              <button onClick={() => setResetConfirmOpen(false)} className="w-full py-2 text-sm text-ink-soft">
-                Abbrechen
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {toast && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-full bg-ink px-4 py-2 shadow-lg">
+        <div className="absolute bottom-24 left-1/2 w-[min(90%,360px)] -translate-x-1/2 rounded-2xl bg-ink px-4 py-2.5 text-center shadow-lg">
           <span className="text-sm font-medium text-white">{toast}</span>
         </div>
       )}
