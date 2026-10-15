@@ -80,9 +80,7 @@ export function EntryForm({
   const [reason, setReason] = useState(existing?.reason || "");
   const symptomOptions = [...new Set([...SYMPTOM_CATEGORIES.filter((c) => c !== "Anderes"), ...(symptomTypes || [])])];
   const symptomIsKnown = existing ? symptomOptions.includes(existing.category ?? "") : true;
-  const [symptomCategory, setSymptomCategory] = useState(
-    existing ? (symptomIsKnown ? existing.category ?? "" : "Anderes") : symptomOptions[0],
-  );
+  const [symptomCategory, setSymptomCategory] = useState(existing ? (symptomIsKnown ? existing.category ?? "" : "Anderes") : "");
   const [customSymptom, setCustomSymptom] = useState(existing && !symptomIsKnown ? existing.category ?? "" : "");
 
   const [level, setLevel] = useState(existing?.level || 0);
@@ -101,7 +99,7 @@ export function EntryForm({
     (categoryId === "weight" && kg.trim().length > 0 && !Number.isNaN(Number(kg))) ||
     (categoryId === "food" && food.trim().length > 0) ||
     categoryId === "vet" ||
-    categoryId === "symptom" ||
+    (categoryId === "symptom" && (symptomCategory === "Anderes" ? customSymptom.trim().length > 0 : symptomCategory.length > 0)) ||
     (categoryId === "stress" && level > 0) ||
     (categoryId === "kosten" && kostenAmount.trim().length > 0 && !Number.isNaN(Number(kostenAmount))) ||
     categoryId === "tagescheck";
