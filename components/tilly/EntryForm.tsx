@@ -14,7 +14,7 @@ import {
   SYMPTOM_CATEGORIES,
   catMeta,
 } from "@/lib/tilly/constants";
-import { dateOnlyToISO, nowLocalISO, toLocalDateValue, toLocalInputValue } from "@/lib/tilly/helpers";
+import { combineLocalDateTime, dateOnlyToISO, nowLocalISO, toLocalDateValue, toLocalTimeValue } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, Chip, FieldLabel, PrimaryButton, StarRow, TextArea, TextInput } from "./ui";
 
@@ -154,7 +154,20 @@ export function EntryForm({
         <div>
           <FieldLabel>{CATEGORIES_WITH_TIME.includes(categoryId) ? "Zeitpunkt" : "Tag"}</FieldLabel>
           {CATEGORIES_WITH_TIME.includes(categoryId) ? (
-            <TextInput type="datetime-local" value={toLocalInputValue(date)} onChange={(e) => setDate(new Date(e.target.value).toISOString())} />
+            // Getrennte date/time-Inputs statt datetime-local: auf Android ist die
+            // Uhrzeit-Auswahl bei datetime-local oft nicht nutzbar.
+            <div className="flex gap-2">
+              <TextInput
+                type="date"
+                value={toLocalDateValue(date)}
+                onChange={(e) => setDate(combineLocalDateTime(e.target.value, toLocalTimeValue(date)))}
+              />
+              <TextInput
+                type="time"
+                value={toLocalTimeValue(date)}
+                onChange={(e) => setDate(combineLocalDateTime(toLocalDateValue(date), e.target.value))}
+              />
+            </div>
           ) : (
             <TextInput type="date" value={toLocalDateValue(date)} onChange={(e) => setDate(dateOnlyToISO(e.target.value))} />
           )}

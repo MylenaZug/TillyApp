@@ -137,8 +137,19 @@ export function toLocalDateValue(iso: string) {
   return toLocalInputValue(iso).slice(0, 10);
 }
 
+export function toLocalTimeValue(iso: string) {
+  return toLocalInputValue(iso).slice(11, 16);
+}
+
 export function dateOnlyToISO(value: string) {
   return new Date(`${value}T12:00:00`).toISOString();
+}
+
+// type="datetime-local" wird auf Android oft nicht zuverlaessig unterstuetzt (teils ohne
+// Uhrzeit-Auswahl) - deshalb getrennte date/time-Inputs, die hier wieder zusammengefuehrt
+// werden.
+export function combineLocalDateTime(dateValue: string, timeValue: string) {
+  return new Date(`${dateValue}T${timeValue || "00:00"}`).toISOString();
 }
 
 export function dateKey(d: Date | string) {
