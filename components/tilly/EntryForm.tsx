@@ -339,9 +339,14 @@ export function EntryForm({
             <div className="rounded-xl border border-hairline bg-bg p-3">
               <div className="mb-1.5 flex items-center justify-between">
                 <FieldLabel>Futterplan</FieldLabel>
-                <span className="min-w-11 text-right text-[11px] text-ink-soft">
-                  {foodPlanStatus === "saving" ? "speichert…" : foodPlanStatus === "saved" ? "gespeichert" : ""}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="min-w-11 text-right text-[11px] text-ink-soft">
+                    {foodPlanStatus === "saving" ? "speichert…" : foodPlanStatus === "saved" ? "gespeichert" : ""}
+                  </span>
+                  <button type="button" onClick={() => onFoodPlanSlotsChange({})} className="flex items-center gap-1 text-[11px] text-rust">
+                    <Trash2 size={11} /> Leeren
+                  </button>
+                </div>
               </div>
               <div className="space-y-3">
                 {DAYTIME_OPTIONS.map((d) => {

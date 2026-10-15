@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, BookOpen, Clock3, Home, Plus, X } from "lucide-react";
+import { BarChart3, BookOpen, Clock3, Home, Images, Plus, X } from "lucide-react";
 import {
   deleteEntry,
   getKv,
@@ -21,6 +21,7 @@ import { HomeView } from "@/components/tilly/HomeView";
 import { HistoryView } from "@/components/tilly/HistoryView";
 import { AnalysisView } from "@/components/tilly/AnalysisView";
 import { ExercisesView } from "@/components/tilly/ExercisesView";
+import { GalleryView } from "@/components/tilly/GalleryView";
 import { EntryForm } from "@/components/tilly/EntryForm";
 
 const DEFAULT_TRAINING_TYPES = ["Sitz", "Leinenführigkeit", "Rückruf"];
@@ -64,7 +65,7 @@ function NavButton({
   );
 }
 
-type View = "home" | "history" | "analysis" | "exercises" | "add";
+type View = "home" | "history" | "analysis" | "exercises" | "gallery" | "add";
 
 export default function AppShell({ userEmail }: { userEmail: string }) {
   const [ready, setReady] = useState(false);
@@ -377,6 +378,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           <HistoryView entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
         )}
         {view === "analysis" && <AnalysisView entries={entries} onAddWeight={() => openAdd("weight")} />}
+        {view === "gallery" && <GalleryView />}
         {view === "exercises" && (
           <ExercisesView
             exercises={exercises}
@@ -413,6 +415,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             <NavButton icon={Clock3} label="Verlauf" active={view === "history"} onClick={() => setView("history")} />
             <div className="w-11 shrink-0" />
             <NavButton icon={BarChart3} label="Auswertung" active={view === "analysis"} onClick={() => setView("analysis")} />
+            <NavButton icon={Images} label="Galerie" active={view === "gallery"} onClick={() => setView("gallery")} />
           </div>
           {view !== "home" && (
             <button
