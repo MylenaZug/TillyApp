@@ -131,8 +131,8 @@ export function GalleryView() {
     try {
       await deletePhoto(id);
     } catch {
-      setError("Löschen fehlgeschlagen.");
       await refresh();
+      setError("Löschen fehlgeschlagen.");
     }
   }
 
