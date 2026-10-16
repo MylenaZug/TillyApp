@@ -1,25 +1,39 @@
 import { mkdir } from "fs/promises";
 import path from "path";
 
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const THUMB_SIZE = 400;
+
+// Nur diese Formate werden akzeptiert; die Dateiendung wird aus dem vom Server per sharp
+// erkannten Format abgeleitet, nie aus dem vom Client gemeldeten Namen/MIME-Typ.
+export const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+
+const EXT_BY_FORMAT: Record<string, string> = {
+  jpeg: "jpg",
+  png: "png",
+  webp: "webp",
+  gif: "gif",
+};
+
+export function extForFormat(format: string | undefined) {
+  return format ? EXT_BY_FORMAT[format] : undefined;
+}
+
 export function uploadsDir() {
   return path.resolve(process.cwd(), process.env.UPLOADS_DIR || "./uploads");
 }
 
-export async function ensureUploadsDir() {
-  const dir = uploadsDir();
-  await mkdir(dir, { recursive: true });
-  return dir;
+export function thumbsDir() {
+  return path.join(uploadsDir(), "thumbs");
 }
 
-const EXT_BY_MIME: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/gif": "gif",
-};
+export async function ensureUploadsDirs() {
+  await mkdir(thumbsDir(), { recursive: true });
+  return uploadsDir();
+}
 
-export function extForMime(mime: string) {
-  return EXT_BY_MIME[mime] || "jpg";
+export function thumbFilename(id: string) {
+  return `${id}.jpg`;
 }
 
 const MIME_BY_EXT: Record<string, string> = {
@@ -33,4 +47,14 @@ const MIME_BY_EXT: Record<string, string> = {
 export function mimeForFilename(filename: string) {
   const ext = filename.split(".").pop()?.toLowerCase() || "";
   return MIME_BY_EXT[ext] || "application/octet-stream";
+}
+
+// USER_DISPLAY_NAMES: JSON-Objekt { "mail@example.com": "Name" } (siehe .env.example)
+export function displayNameFor(email: string) {
+  try {
+    const map = JSON.parse(process.env.USER_DISPLAY_NAMES || "{}") as Record<string, string>;
+    return map[email] || email.split("@")[0];
+  } catch {
+    return email.split("@")[0];
+  }
 }

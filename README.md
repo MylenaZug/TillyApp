@@ -74,6 +74,8 @@ funktioniert lokal trotzdem alles über den automatischen Dev-Login (`DEV_USER_E
 | `npm run test:watch`   | Vitest im Watch-Modus                                                |
 | `npm run db:generate`  | Drizzle-Migration aus `db/schema.ts` erzeugen                        |
 | `npm run db:migrate`   | Migration auf `DB_PATH` anwenden                                     |
+| `npm run backup`       | DB + Galerie-Fotos als `backups/tilly-<zeit>.tar.gz` sichern (`BACKUP_DIR`, `BACKUP_KEEP`, Default 14) |
+| `npm run restore -- <datei> --yes` | Backup einspielen (App vorher stoppen; alter Stand bleibt als `.before-restore-*`) |
 | `npm run db:seed`      | Standardübungen einmalig in den `kv_store` einspielen (idempotent)   |
 
 ## Deployment
