@@ -274,14 +274,14 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   }
 
   async function startAloneTimer() {
-    const iso = nowLocalISO();
+    const iso = new Date().toISOString();
     setAloneStart(iso);
     await setKv("alone-start", iso);
   }
 
   async function stopAloneTimer() {
     if (!aloneStart) return;
-    const endedAt = nowLocalISO();
+    const endedAt = new Date().toISOString();
     const ms = new Date(endedAt).getTime() - new Date(aloneStart).getTime();
     setAloneStart(null);
     await setKv("alone-start", "");

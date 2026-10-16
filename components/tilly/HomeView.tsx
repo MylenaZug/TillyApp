@@ -66,8 +66,35 @@ export function HomeView({
   const aloneElapsedMs = aloneStart ? Date.now() - new Date(aloneStart).getTime() : 0;
   const aloneLast = [...entries].filter((e) => e.type === "alone").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
+  const aloneCard = (
+      <div className="mb-4 rounded-2xl border border-hairline bg-card p-4">
+        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+          <Timer size={15} className="text-plum" /> {catMeta("alone").label}
+        </div>
+        {aloneStart ? (
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-2xl font-bold tabular-nums text-ink">{formatDuration(aloneElapsedMs)}</div>
+            <button onClick={onStopAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
+              Stop
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-ink-soft">
+              {aloneLast ? `Zuletzt: ${entrySummary(aloneLast)}` : "Noch nicht erfasst"}
+            </div>
+            <button onClick={onStartAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
+              Start
+            </button>
+          </div>
+        )}
+      </div>
+  );
+
   return (
     <div>
+      {aloneStart && aloneCard}
+
       {showStressAlert && (
         <div className="mb-4 flex items-center gap-2 rounded-2xl bg-amber-soft px-4 py-3">
           <Zap size={16} className="text-amber" />
@@ -148,6 +175,8 @@ export function HomeView({
         ))}
       </div>
 
+      {!aloneStart && aloneCard}
+
       <div className="mt-2 rounded-2xl border border-hairline bg-card p-4">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-sm font-semibold text-ink">
@@ -163,29 +192,6 @@ export function HomeView({
           placeholder="Für alles, was sonst nirgends reinpasst – z. B. Erinnerungen für einander…"
           rows={3}
         />
-      </div>
-
-      <div className="mt-2 rounded-2xl border border-hairline bg-card p-4">
-        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
-          <Timer size={15} className="text-plum" /> {catMeta("alone").label}
-        </div>
-        {aloneStart ? (
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-2xl font-bold tabular-nums text-ink">{formatDuration(aloneElapsedMs)}</div>
-            <button onClick={onStopAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
-              Stop
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm text-ink-soft">
-              {aloneLast ? `Zuletzt: ${entrySummary(aloneLast)}` : "Noch nicht erfasst"}
-            </div>
-            <button onClick={onStartAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
-              Start
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

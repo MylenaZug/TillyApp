@@ -190,8 +190,8 @@ export function entrySummary(entry: AnyEntry): string {
       case "tagescheck":
         return `Folgsamkeit ${starGlyphs(entry.folgsamkeit)} · Sharklevel ${starGlyphs(entry.energie)}`;
       case "alone":
-        if (!entry.ms || !entry.startedAt || !entry.endedAt) return "Eintrag gespeichert";
-        return `${formatDuration(entry.ms)} (${fmtTime(entry.startedAt)}–${fmtTime(entry.endedAt)})`;
+        if (entry.ms === undefined || !entry.startedAt || !entry.endedAt) return "Eintrag gespeichert";
+        return `${formatDuration(entry.ms)} · ${fmtTime(entry.startedAt)}–${fmtTime(entry.endedAt)} Uhr`;
       default:
         return "Eintrag gespeichert";
     }
