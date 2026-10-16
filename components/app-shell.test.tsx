@@ -26,6 +26,8 @@ vi.mock("@/lib/storage/useSyncStatus", () => ({
   useSyncStatus: () => mockUseSyncStatus(),
 }));
 
+const syncInfo = (o: object) => ({ status: "synced", pending: 0, lastSyncAt: Date.now(), syncing: false, syncNow: vi.fn(), ...o });
+
 const { default: AppShell } = await import("@/components/app-shell");
 
 function makeEntry(overrides: Partial<EntryRecord>): EntryRecord {
@@ -39,7 +41,7 @@ beforeEach(() => {
   mockSetKv.mockResolvedValue(undefined);
   mockSaveEntry.mockResolvedValue(makeEntry({}));
   mockDeleteEntry.mockResolvedValue(undefined);
-  mockUseSyncStatus.mockReturnValue({ status: "synced", pending: 0 });
+  mockUseSyncStatus.mockReturnValue(syncInfo({}));
 });
 
 afterEach(() => {
@@ -107,18 +109,42 @@ describe("AppShell", () => {
   });
 
   it("zeigt den Offline-Status aus useSyncStatus an", async () => {
-    mockUseSyncStatus.mockReturnValue({ status: "offline", pending: 0 });
+    mockUseSyncStatus.mockReturnValue(syncInfo({ status: "offline" }));
 
     render(<AppShell userEmail="a@example.com" />);
 
-    expect(await screen.findByText("Offline")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Offline/ })).toBeInTheDocument();
   });
 
   it("zeigt die Anzahl ausstehender Aenderungen an", async () => {
-    mockUseSyncStatus.mockReturnValue({ status: "pending", pending: 2 });
+    mockUseSyncStatus.mockReturnValue(syncInfo({ status: "pending", pending: 2 }));
 
     render(<AppShell userEmail="a@example.com" />);
 
-    expect(await screen.findByText("2 ausstehend")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /2 ausstehend/ })).toBeInTheDocument();
+  });
+
+  it("loest den Sync ueber den Sync-Button aus", async () => {
+    const syncNow = vi.fn();
+    mockUseSyncStatus.mockReturnValue(syncInfo({ syncNow }));
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+
+    await user.click(await screen.findByRole("button", { name: /^Sync/ }));
+
+    expect(syncNow).toHaveBeenCalled();
+  });
+
+  it("hat die Navigation Uebungen, Galerie, Verlauf, Auswertung und Tilly-Foto als Home", async () => {
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+    await waitFor(() => expect(mockListEntries).toHaveBeenCalled());
+
+    for (const name of ["Übungen", "Galerie", "Verlauf", "Auswertung"]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole("button", { name: "Verlauf" }));
+    await user.click(screen.getByRole("button", { name: "Start" }));
+    expect(screen.getByRole("radiogroup", { name: "Meine Geduld" })).toBeInTheDocument();
   });
 });

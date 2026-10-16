@@ -9,6 +9,13 @@ export function onStorageChange(listener: Listener) {
   return () => listeners.delete(listener);
 }
 
+let lastSyncAt: number | null = null;
+
+// Zeitpunkt (Client-Uhr) des letzten erfolgreichen Syncs in dieser Sitzung.
+export function getLastSyncAt() {
+  return lastSyncAt;
+}
+
 function notify() {
   listeners.forEach((l) => l());
 }
@@ -52,6 +59,7 @@ export async function runSync() {
   try {
     await pushQueue();
     await pullChanges();
+    lastSyncAt = Date.now();
     notify();
   } catch (err) {
     // Bleibt in der Queue - naechster Trigger (online-Event/Intervall/Fokus) versucht es erneut.

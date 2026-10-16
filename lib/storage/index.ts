@@ -2,7 +2,7 @@ import { localDb } from "./local-db";
 import { onStorageChange, runSync } from "./sync";
 import type { EntryRecord, KvMutation, PatienceRecord } from "./types";
 
-export { onStorageChange, runSync, setupAutoSync } from "./sync";
+export { getLastSyncAt, onStorageChange, runSync, setupAutoSync } from "./sync";
 
 function now() {
   return Date.now();
