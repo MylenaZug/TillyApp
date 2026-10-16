@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { BarChart, Bar, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CHART_COLORS, KOSTEN_CATEGORIES, STOOL_CONSISTENCY, STOOL_FLAGS, WEEKDAYS_DE, catMeta } from "@/lib/tilly/constants";
-import { daysAgo, fmtDate, stressLabelFor } from "@/lib/tilly/helpers";
+import { daysAgo, fmtDate, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
 import type { AnyEntry } from "@/lib/tilly/types";
 import { Chip } from "./ui";
 
@@ -103,6 +103,8 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
     label: cat,
     total: kostenEntries.filter((e) => e.category === cat).reduce((s, e) => s + (Number(e.amount) || 0), 0),
   })).filter((c) => c.total > 0);
+  const aloneEntries = entries.filter((e) => e.type === "alone" && inRange(e));
+  const aloneTotalMs = aloneEntries.reduce((s, e) => s + (e.ms || 0), 0);
   const weightEntries = entries.filter((e) => e.type === "weight" && inRange(e));
   const weightChartData = [...weightEntries]
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -226,6 +228,21 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
         )}
       </SectionCard>
 
+      <SectionCard title={catMeta("alone").label} summary={aloneEntries.length > 0 ? formatDuration(aloneTotalMs) : "–"}>
+        {aloneEntries.length === 0 ? (
+          <div className="text-sm text-ink-soft">Keine erfassten Alleine-Zeiten in diesem Zeitraum.</div>
+        ) : (
+          <>
+            <div className="mb-3 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-plum">{formatDuration(aloneTotalMs)}</span>
+              <span className="text-sm text-ink-soft">aus {aloneEntries.length}×</span>
+            </div>
+            <div className="text-[13px] text-ink-soft">Ø {formatDuration(aloneTotalMs / aloneEntries.length)} pro Mal</div>
+            <WeekdayChart entriesList={aloneEntries} color={catMeta("alone").hex} unitLabel="war sie allein" />
+          </>
+        )}
+      </SectionCard>
+
       <SectionCard
         title="Gewicht"
         summary={weightEntries.length > 0 ? `${[...weightEntries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].kg} kg` : "–"}
@@ -247,7 +264,7 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
             </ResponsiveContainer>
           </div>
         )}
-        <button onClick={onAddWeight} className="mt-3 rounded-full bg-teal px-3 py-1.5 text-xs text-white">
+        <button onClick={onAddWeight} className="mt-3 rounded-full bg-teal px-3 py-1.5 text-xs text-ink">
           + Gewicht eintragen
         </button>
       </SectionCard>

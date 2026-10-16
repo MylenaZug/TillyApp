@@ -31,7 +31,14 @@ export function HistoryView({
           Alle
         </Chip>
         {CATEGORIES.map((c) => (
-          <Chip key={c.id} active={filter === c.id} onClick={() => setFilter(c.id)} colorClass={c.text} activeBgClass={c.bg}>
+          <Chip
+            key={c.id}
+            active={filter === c.id}
+            onClick={() => setFilter(c.id)}
+            colorClass={c.text}
+            activeBgClass={c.bg}
+            activeTextClass={c.activeText}
+          >
             {c.label}
           </Chip>
         ))}

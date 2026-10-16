@@ -167,17 +167,19 @@ export function PrimaryButton({
   onClick,
   disabled,
   bgClass = "bg-ink",
+  textClass = "text-white",
 }: {
   children: ReactNode;
   onClick: () => void;
   disabled?: boolean;
   bgClass?: string;
+  textClass?: string;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`w-full rounded-xl py-3 font-medium text-white transition-transform active:scale-[0.98] disabled:opacity-40 ${bgClass}`}
+      className={`w-full rounded-xl py-3 font-medium transition-transform active:scale-[0.98] disabled:opacity-40 ${textClass} ${bgClass}`}
     >
       {children}
     </button>

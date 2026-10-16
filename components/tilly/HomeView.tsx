@@ -1,8 +1,9 @@
 "use client";
 
-import { Check, Heart, RotateCcw, Scale, StickyNote, UtensilsCrossed, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Heart, Scale, StickyNote, Timer, UtensilsCrossed, Zap } from "lucide-react";
 import { ADDABLE_CATEGORIES, DAYTIME_OPTIONS, catMeta } from "@/lib/tilly/constants";
-import { daysAgo, stressLabelFor } from "@/lib/tilly/helpers";
+import { daysAgo, entrySummary, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, Rating, TextArea } from "./ui";
 
@@ -21,9 +22,11 @@ export function HomeView({
   generalNote,
   onNoteChange,
   noteStatus,
-  onRequestReset,
   foodPlanSlots,
   onConfirmFoodSlot,
+  aloneStart,
+  onStartAlone,
+  onStopAlone,
 }: {
   entries: AnyEntry[];
   onOpenAdd: (categoryId: CategoryId) => void;
@@ -36,9 +39,11 @@ export function HomeView({
   generalNote: string;
   onNoteChange: (value: string) => void;
   noteStatus: string;
-  onRequestReset: () => void;
   foodPlanSlots: FoodPlanSlots;
   onConfirmFoodSlot: (daytime: string) => void;
+  aloneStart: string | null;
+  onStartAlone: () => void;
+  onStopAlone: () => void;
 }) {
   // Nur der gestrige Eintrag zaehlt: hoher Stress gestern -> heute als Ruhetag vorschlagen
   const yesterdayStress = entries.find((e) => e.type === "stress" && daysAgo(e.date) === 1);
@@ -49,6 +54,17 @@ export function HomeView({
 
   const todayFoodEntries = entries.filter((e) => e.type === "food" && daysAgo(e.date) === 0);
   const foodSlotsToday = DAYTIME_OPTIONS.filter((d) => foodPlanSlots[d]?.food?.trim());
+
+  // Erzwingt jede Sekunde einen Re-Render, waehrend der Alleine-Timer laeuft, damit die
+  // Anzeige live mitzaehlt - der Tick-Wert selbst wird nicht gelesen.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!aloneStart) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [aloneStart]);
+  const aloneElapsedMs = aloneStart ? Date.now() - new Date(aloneStart).getTime() : 0;
+  const aloneLast = [...entries].filter((e) => e.type === "alone").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
   return (
     <div>
@@ -149,10 +165,27 @@ export function HomeView({
         />
       </div>
 
-      <div className="mt-3 flex justify-end">
-        <button onClick={onRequestReset} className="flex items-center gap-1 text-[11px] text-ink-soft opacity-60">
-          <RotateCcw size={11} /> Daten zurücksetzen
-        </button>
+      <div className="mt-2 rounded-2xl border border-hairline bg-card p-4">
+        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+          <Timer size={15} className="text-plum" /> {catMeta("alone").label}
+        </div>
+        {aloneStart ? (
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-2xl font-bold tabular-nums text-ink">{formatDuration(aloneElapsedMs)}</div>
+            <button onClick={onStopAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
+              Stop
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-ink-soft">
+              {aloneLast ? `Zuletzt: ${entrySummary(aloneLast)}` : "Noch nicht erfasst"}
+            </div>
+            <button onClick={onStartAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
+              Start
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

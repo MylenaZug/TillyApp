@@ -39,6 +39,18 @@ export const dailyPatience = sqliteTable(
   })
 );
 
+// Die Bilddatei selbst liegt nicht in der DB, sondern unter UPLOADS_DIR auf der Platte
+// (siehe app/api/photos) - hier nur Metadaten, damit die Galerie schnell laden kann.
+export const photos = sqliteTable("photos", {
+  id: text("id").primaryKey(),
+  filename: text("filename").notNull(),
+  note: text("note"),
+  uploadedBy: text("uploaded_by").notNull(),
+  createdAt: integer("created_at").notNull(),
+  deleted: integer("deleted").notNull().default(0),
+});
+
 export type KvRow = typeof kvStore.$inferSelect;
 export type EntryRow = typeof entries.$inferSelect;
 export type DailyPatienceRow = typeof dailyPatience.$inferSelect;
+export type PhotoRow = typeof photos.$inferSelect;

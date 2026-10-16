@@ -14,7 +14,7 @@ import {
   SYMPTOM_CATEGORIES,
   catMeta,
 } from "@/lib/tilly/constants";
-import { dateOnlyToISO, nowLocalISO, toLocalDateValue, toLocalInputValue } from "@/lib/tilly/helpers";
+import { combineLocalDateTime, dateOnlyToISO, nowLocalISO, toLocalDateValue, toLocalTimeValue } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, Chip, FieldLabel, PrimaryButton, StarRow, TextArea, TextInput } from "./ui";
 
@@ -80,9 +80,7 @@ export function EntryForm({
   const [reason, setReason] = useState(existing?.reason || "");
   const symptomOptions = [...new Set([...SYMPTOM_CATEGORIES.filter((c) => c !== "Anderes"), ...(symptomTypes || [])])];
   const symptomIsKnown = existing ? symptomOptions.includes(existing.category ?? "") : true;
-  const [symptomCategory, setSymptomCategory] = useState(
-    existing ? (symptomIsKnown ? existing.category ?? "" : "Anderes") : symptomOptions[0],
-  );
+  const [symptomCategory, setSymptomCategory] = useState(existing ? (symptomIsKnown ? existing.category ?? "" : "Anderes") : "");
   const [customSymptom, setCustomSymptom] = useState(existing && !symptomIsKnown ? existing.category ?? "" : "");
 
   const [level, setLevel] = useState(existing?.level || 0);
@@ -101,7 +99,7 @@ export function EntryForm({
     (categoryId === "weight" && kg.trim().length > 0 && !Number.isNaN(Number(kg))) ||
     (categoryId === "food" && food.trim().length > 0) ||
     categoryId === "vet" ||
-    categoryId === "symptom" ||
+    (categoryId === "symptom" && (symptomCategory === "Anderes" ? customSymptom.trim().length > 0 : symptomCategory.length > 0)) ||
     (categoryId === "stress" && level > 0) ||
     (categoryId === "kosten" && kostenAmount.trim().length > 0 && !Number.isNaN(Number(kostenAmount))) ||
     categoryId === "tagescheck";
@@ -154,7 +152,20 @@ export function EntryForm({
         <div>
           <FieldLabel>{CATEGORIES_WITH_TIME.includes(categoryId) ? "Zeitpunkt" : "Tag"}</FieldLabel>
           {CATEGORIES_WITH_TIME.includes(categoryId) ? (
-            <TextInput type="datetime-local" value={toLocalInputValue(date)} onChange={(e) => setDate(new Date(e.target.value).toISOString())} />
+            // Getrennte date/time-Inputs statt datetime-local: auf Android ist die
+            // Uhrzeit-Auswahl bei datetime-local oft nicht nutzbar.
+            <div className="flex gap-2">
+              <TextInput
+                type="date"
+                value={toLocalDateValue(date)}
+                onChange={(e) => setDate(combineLocalDateTime(e.target.value, toLocalTimeValue(date)))}
+              />
+              <TextInput
+                type="time"
+                value={toLocalTimeValue(date)}
+                onChange={(e) => setDate(combineLocalDateTime(toLocalDateValue(date), e.target.value))}
+              />
+            </div>
           ) : (
             <TextInput type="date" value={toLocalDateValue(date)} onChange={(e) => setDate(dateOnlyToISO(e.target.value))} />
           )}
@@ -166,7 +177,14 @@ export function EntryForm({
               <FieldLabel>Konsistenz</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {STOOL_CONSISTENCY.map((c) => (
-                  <Chip key={c} active={consistency.includes(c)} onClick={() => toggleConsistency(c)} colorClass={meta.text} activeBgClass={meta.bg}>
+                  <Chip
+                    key={c}
+                    active={consistency.includes(c)}
+                    onClick={() => toggleConsistency(c)}
+                    colorClass={meta.text}
+                    activeBgClass={meta.bg}
+                    activeTextClass={meta.activeText}
+                  >
                     {c}
                   </Chip>
                 ))}
@@ -176,7 +194,14 @@ export function EntryForm({
               <FieldLabel>Menge</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {STOOL_AMOUNTS.map((a) => (
-                  <Chip key={a} active={stoolAmount === a} onClick={() => setStoolAmount(a)} colorClass={meta.text} activeBgClass={meta.bg}>
+                  <Chip
+                    key={a}
+                    active={stoolAmount === a}
+                    onClick={() => setStoolAmount(a)}
+                    colorClass={meta.text}
+                    activeBgClass={meta.bg}
+                    activeTextClass={meta.activeText}
+                  >
                     {a}
                   </Chip>
                 ))}
@@ -193,7 +218,14 @@ export function EntryForm({
               {combinedTrainingTypes.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {combinedTrainingTypes.map((t) => (
-                    <Chip key={t} active={activity === t} onClick={() => setActivity(t)} colorClass={meta.text} activeBgClass={meta.bg}>
+                    <Chip
+                      key={t}
+                      active={activity === t}
+                      onClick={() => setActivity(t)}
+                      colorClass={meta.text}
+                      activeBgClass={meta.bg}
+                      activeTextClass={meta.activeText}
+                    >
                       {t}
                     </Chip>
                   ))}
@@ -218,7 +250,14 @@ export function EntryForm({
               <FieldLabel>Tageszeit</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {DAYTIME_OPTIONS.map((d) => (
-                  <Chip key={d} active={daytime === d} onClick={() => setDaytime(d)} colorClass={meta.text} activeBgClass={meta.bg}>
+                  <Chip
+                    key={d}
+                    active={daytime === d}
+                    onClick={() => setDaytime(d)}
+                    colorClass={meta.text}
+                    activeBgClass={meta.bg}
+                    activeTextClass={meta.activeText}
+                  >
                     {d}
                   </Chip>
                 ))}
@@ -235,7 +274,14 @@ export function EntryForm({
               {foodTypes.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {foodTypes.slice(0, 8).map((t) => (
-                    <Chip key={t} active={food === t} onClick={() => setFood(t)} colorClass={meta.text} activeBgClass={meta.bg}>
+                    <Chip
+                      key={t}
+                      active={food === t}
+                      onClick={() => setFood(t)}
+                      colorClass={meta.text}
+                      activeBgClass={meta.bg}
+                      activeTextClass={meta.activeText}
+                    >
                       {t}
                     </Chip>
                   ))}
@@ -246,7 +292,14 @@ export function EntryForm({
               <FieldLabel>Menge</FieldLabel>
               <div className="mb-2 flex flex-wrap gap-2">
                 {FOOD_AMOUNT_UNITS.map((u) => (
-                  <Chip key={u} active={amountUnit === u} onClick={() => setAmountUnit(u)} colorClass={meta.text} activeBgClass={meta.bg}>
+                  <Chip
+                    key={u}
+                    active={amountUnit === u}
+                    onClick={() => setAmountUnit(u)}
+                    colorClass={meta.text}
+                    activeBgClass={meta.bg}
+                    activeTextClass={meta.activeText}
+                  >
                     {u}
                   </Chip>
                 ))}
@@ -274,6 +327,7 @@ export function EntryForm({
                     onClick={() => setFoodDaytime((cur) => (cur === d ? "" : d))}
                     colorClass={meta.text}
                     activeBgClass={meta.bg}
+                    activeTextClass={meta.activeText}
                   >
                     {d}
                   </Chip>
@@ -283,9 +337,14 @@ export function EntryForm({
             <div className="rounded-xl border border-hairline bg-bg p-3">
               <div className="mb-1.5 flex items-center justify-between">
                 <FieldLabel>Futterplan</FieldLabel>
-                <span className="min-w-11 text-right text-[11px] text-ink-soft">
-                  {foodPlanStatus === "saving" ? "speichert…" : foodPlanStatus === "saved" ? "gespeichert" : ""}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="min-w-11 text-right text-[11px] text-ink-soft">
+                    {foodPlanStatus === "saving" ? "speichert…" : foodPlanStatus === "saved" ? "gespeichert" : ""}
+                  </span>
+                  <button type="button" onClick={() => onFoodPlanSlotsChange({})} className="flex items-center gap-1 text-[11px] text-rust">
+                    <Trash2 size={11} /> Leeren
+                  </button>
+                </div>
               </div>
               <div className="space-y-3">
                 {DAYTIME_OPTIONS.map((d) => {
@@ -324,6 +383,7 @@ export function EntryForm({
                             onClick={() => updateFoodPlanSlot(d, { amountUnit: u })}
                             colorClass={meta.text}
                             activeBgClass={meta.bg}
+                            activeTextClass={meta.activeText}
                           >
                             {u}
                           </Chip>
@@ -416,7 +476,14 @@ export function EntryForm({
               <FieldLabel>Wofür?</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {KOSTEN_CATEGORIES.map((c) => (
-                  <Chip key={c} active={kostenCategory === c} onClick={() => setKostenCategory(c)} colorClass={meta.text} activeBgClass={meta.bg}>
+                  <Chip
+                    key={c}
+                    active={kostenCategory === c}
+                    onClick={() => setKostenCategory(c)}
+                    colorClass={meta.text}
+                    activeBgClass={meta.bg}
+                    activeTextClass={meta.activeText}
+                  >
                     {c}
                   </Chip>
                 ))}
@@ -490,7 +557,7 @@ export function EntryForm({
         )}
 
         <div className="space-y-2 pt-2">
-          <PrimaryButton onClick={handleSave} disabled={!canSave} bgClass={meta.bg}>
+          <PrimaryButton onClick={handleSave} disabled={!canSave} bgClass={meta.bg} textClass={meta.activeText}>
             {existing ? "Änderungen speichern" : "Eintrag speichern"}
           </PrimaryButton>
           {existing && onDelete && (
