@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, PawPrint } from "lucide-react";
 import { CALENDAR_CATEGORY_IDS, CATEGORIES, CATEGORIES_WITH_TIME, WEEKDAYS_DE, catMeta } from "@/lib/tilly/constants";
 import { dateKey, entrySummary, fmtTime, startOfDay } from "@/lib/tilly/helpers";
 import type { AnyEntry } from "@/lib/tilly/types";
+import type { PatienceRecord } from "@/lib/storage/types";
 import { CatIcon } from "./ui";
 
 export function DayRow({ entry, onClick }: { entry: AnyEntry; onClick?: (entry: AnyEntry) => void }) {
@@ -29,7 +30,39 @@ export function DayRow({ entry, onClick }: { entry: AnyEntry; onClick?: (entry: 
   );
 }
 
-export function TwoWeekCalendar({ entries, onEdit }: { entries: AnyEntry[]; onEdit: (entry: AnyEntry) => void }) {
+export const patienceName = (r: PatienceRecord) => r.userName || r.userEmail.split("@")[0];
+
+const PATIENCE_ICON = { filled: "/icons/tilly/rating-patience-filled.png", empty: "/icons/tilly/rating-patience-empty.png" };
+
+export function PatienceStars({ value, size = 14 }: { value: number; size?: number }) {
+  return (
+    <span className="flex" role="img" aria-label={`${value} von 5`}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={n} src={n <= value ? PATIENCE_ICON.filled : PATIENCE_ICON.empty} width={size} height={size} alt="" className="object-contain" />
+      ))}
+    </span>
+  );
+}
+
+export function PatienceRow({ record }: { record: PatienceRecord }) {
+  return (
+    <div className="flex w-full items-center justify-between rounded-xl border border-hairline bg-card py-2.5 pl-3 pr-3" style={{ borderLeftColor: "#C2185B", borderLeftWidth: 3 }}>
+      <span className="text-sm font-medium text-ink">Geduld · {patienceName(record)}</span>
+      <PatienceStars value={record.geduld} />
+    </div>
+  );
+}
+
+export function TwoWeekCalendar({
+  entries,
+  onEdit,
+  patience = [],
+}: {
+  entries: AnyEntry[];
+  onEdit: (entry: AnyEntry) => void;
+  patience?: PatienceRecord[];
+}) {
   const today = startOfDay(new Date());
   const todayKey = dateKey(today);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -85,6 +118,7 @@ export function TwoWeekCalendar({ entries, onEdit }: { entries: AnyEntry[]; onEd
         ? "Gestern"
         : `${selectedDate.toLocaleDateString("de-DE", { weekday: "long" })}, ${selectedDate.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}`;
   const selectedEntries = entries.filter((e) => dateKey(e.date) === selected);
+  const selectedPatience = patience.filter((r) => r.date === selected && r.geduld > 0);
 
   return (
     <div>
@@ -146,15 +180,37 @@ export function TwoWeekCalendar({ entries, onEdit }: { entries: AnyEntry[]; onEd
       </div>
 
       <div className="mb-2 text-xs font-semibold text-ink-soft">{selectedLabel}</div>
-      {selectedEntries.length === 0 ? (
+      {selectedEntries.length === 0 && selectedPatience.length === 0 ? (
         <div className="py-6 text-center text-sm text-ink-soft">Keine Einträge an diesem Tag.</div>
       ) : (
         <div className="space-y-2">
           {selectedEntries.map((e) => (
             <DayRow key={e.id} entry={e} onClick={onEdit} />
           ))}
+          {selectedPatience.map((r) => (
+            <PatienceRow key={`${r.userEmail}:${r.date}`} record={r} />
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+export function PatienceTimelineRow({ record }: { record: PatienceRecord }) {
+  return (
+    <div className="relative flex w-full items-start gap-3 pb-4 text-left">
+      <div className="absolute -left-4 top-0.5 flex h-4 w-4 items-center justify-center rounded-full" style={{ background: "#F8E1EC" }}>
+        <PawPrint size={9} style={{ color: "#C2185B" }} />
+      </div>
+      <div className="flex-1 rounded-xl border border-hairline bg-card px-3 py-2.5">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-ink">Geduld · {patienceName(record)}</span>
+          <span className="text-[11px] text-ink-soft">{new Date(`${record.date}T12:00:00`).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}</span>
+        </div>
+        <div className="mt-1">
+          <PatienceStars value={record.geduld} />
+        </div>
+      </div>
     </div>
   );
 }

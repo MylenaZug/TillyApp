@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { Check, Heart, Scale, StickyNote, Timer, UtensilsCrossed, Zap } from "lucide-react";
 import { ADDABLE_CATEGORIES, DAYTIME_OPTIONS, catMeta } from "@/lib/tilly/constants";
-import { daysAgo, entrySummary, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
+import { dateKey, daysAgo, entrySummary, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, FoodPlanSlots } from "@/lib/tilly/types";
+import type { PatienceRecord } from "@/lib/storage/types";
 import { CatIcon, Rating, TextArea } from "./ui";
+import { PatienceStars, patienceName } from "./Calendar";
 
 const PATIENCE_ICON = { filled: "/icons/tilly/rating-patience-filled.png", empty: "/icons/tilly/rating-patience-empty.png" };
 const SHARK_ICON = { filled: "/icons/tilly/rating-shark-filled.png", empty: "/icons/tilly/rating-shark-empty.png" };
@@ -16,6 +18,8 @@ export function HomeView({
   folgsamkeit,
   energie,
   patience,
+  userEmail,
+  allPatience,
   onUpdateFolgsamkeit,
   onUpdateEnergie,
   onUpdatePatience,
@@ -33,6 +37,8 @@ export function HomeView({
   folgsamkeit: number;
   energie: number;
   patience: number;
+  userEmail: string;
+  allPatience: PatienceRecord[];
   onUpdateFolgsamkeit: (value: number) => void;
   onUpdateEnergie: (value: number) => void;
   onUpdatePatience: (value: number) => void;
@@ -63,6 +69,21 @@ export function HomeView({
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, [aloneStart]);
+  const [othersOpen, setOthersOpen] = useState(false);
+  const todayKey = dateKey(new Date());
+  // Bekannt sind andere Nutzer nur durch fruehere Eintraege; ohne Eintrag heute gilt 0/5.
+  const others = Object.values(
+    allPatience
+      .filter((r) => r.userEmail !== userEmail)
+      .reduce<Record<string, PatienceRecord>>((acc, r) => {
+        const cur = acc[r.userEmail];
+        const isToday = r.date === todayKey;
+        if (!cur || isToday || (cur.date !== todayKey && r.date > cur.date)) {
+          acc[r.userEmail] = isToday ? r : { ...r, geduld: 0 };
+        }
+        return acc;
+      }, {}),
+  ).sort((a, b) => patienceName(a).localeCompare(patienceName(b)));
   const aloneElapsedMs = aloneStart ? Date.now() - new Date(aloneStart).getTime() : 0;
   const aloneLast = [...entries].filter((e) => e.type === "alone").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
@@ -157,7 +178,28 @@ export function HomeView({
         </div>
         <Rating label="Folgsamkeit" value={folgsamkeit} onChange={onUpdateFolgsamkeit} colorClass="text-gold" />
         <div className="h-px bg-hairline" />
-        <Rating label="Meine Geduld" value={patience} onChange={onUpdatePatience} icon={PATIENCE_ICON} colorClass="text-rose" />
+        <Rating
+          label="Meine Geduld"
+          value={patience}
+          onChange={onUpdatePatience}
+          icon={PATIENCE_ICON}
+          colorClass="text-rose"
+          toggle={{ open: othersOpen, onToggle: () => setOthersOpen((o) => !o), controls: "other-patience", ariaLabel: "Geduld der anderen" }}
+        />
+        {othersOpen && (
+          <div id="other-patience" className="space-y-1 pb-1.5">
+            {others.length === 0 ? (
+              <div className="text-xs text-ink-soft">Noch keine anderen Nutzer.</div>
+            ) : (
+              others.map((r) => (
+                <div key={r.userEmail} className="flex items-center justify-between">
+                  <span className="text-sm text-ink-soft">{patienceName(r)}</span>
+                  <PatienceStars value={r.geduld} size={22} />
+                </div>
+              ))
+            )}
+          </div>
+        )}
         <div className="h-px bg-hairline" />
         <Rating label="Sharklevel" value={energie} onChange={onUpdateEnergie} icon={SHARK_ICON} colorClass="text-amber" />
       </div>

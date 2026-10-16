@@ -6,6 +6,7 @@ import {
   deleteEntry,
   getKv,
   getPatience,
+  listPatience,
   listEntries,
   saveEntry,
   setKv,
@@ -13,7 +14,7 @@ import {
 } from "@/lib/storage";
 import { useSyncStatus } from "@/lib/storage/useSyncStatus";
 import { SyncButton } from "@/components/tilly/SyncButton";
-import type { EntryRecord } from "@/lib/storage/types";
+import type { EntryRecord, PatienceRecord } from "@/lib/storage/types";
 import { ADDABLE_CATEGORIES, SYMPTOM_CATEGORIES, catMeta } from "@/lib/tilly/constants";
 import { daysAgo, dateKey, formatDuration, nowLocalISO, tillyAge, weightFeedback } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
@@ -78,6 +79,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const foodPlanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const foodPlanSlotsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [patience, setPatience] = useState(0);
+  const [allPatience, setAllPatience] = useState<PatienceRecord[]>([]);
   const [aloneStart, setAloneStart] = useState<string | null>(null);
 
   const [view, setView] = useState<View>("home");
@@ -120,13 +122,19 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         // kv_store - hier nur noch laden, kein Runtime-Merge/Seed im Client mehr noetig.
         if (ex) setExercises(JSON.parse(ex));
 
-        await Promise.all([refresh(), getPatience(userEmail, dateKey(new Date())).then(setPatience)]);
+        await Promise.all([refresh(), getPatience(userEmail, dateKey(new Date())).then(setPatience), listPatience().then(setAllPatience)]);
       } finally {
         setReady(true);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail]);
+
+  // Geduld der anderen kommt per Sync - nach jedem erfolgreichen Sync neu einlesen.
+  useEffect(() => {
+    if (!sync.lastSyncAt) return;
+    void listPatience().then(setAllPatience);
+  }, [sync.lastSyncAt]);
 
   function showToast(message: string) {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -210,6 +218,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   async function updatePatience(value: number) {
     setPatience(value);
     await setMyPatience(userEmail, dateKey(new Date()), value);
+    setAllPatience(await listPatience());
   }
 
   function handleNoteChange(text: string) {
@@ -347,6 +356,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             folgsamkeit={todayCheck?.folgsamkeit || 0}
             energie={todayCheck?.energie || 0}
             patience={patience}
+            userEmail={userEmail}
+            allPatience={allPatience}
             onUpdateFolgsamkeit={(v) => void updateTodayCheck("folgsamkeit", v)}
             onUpdateEnergie={(v) => void updateTodayCheck("energie", v)}
             onUpdatePatience={(v) => void updatePatience(v)}
@@ -361,7 +372,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           />
         )}
         {view === "history" && (
-          <HistoryView entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
+          <HistoryView patience={allPatience} entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
         )}
         {view === "analysis" && <AnalysisView entries={entries} onAddWeight={() => openAdd("weight")} />}
         {view === "gallery" && <GalleryView />}

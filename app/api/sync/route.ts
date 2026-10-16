@@ -3,6 +3,7 @@ import { gt, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db/client";
 import { dailyPatience, entries, kvStore } from "@/db/schema";
+import { displayNameFor } from "@/lib/server/uploads";
 
 type KvMutation = { key: string; value: string; updatedAt: number };
 type EntryMutation = { id: string; type: string; data: string; updatedAt: number; deleted?: 0 | 1 };
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
     serverTime: Date.now(),
     kv: kvRows,
     entries: entryRows,
-    dailyPatience: patienceRows,
+    dailyPatience: patienceRows.map((r) => ({ ...r, userName: displayNameFor(r.userEmail) })),
   });
 }
 

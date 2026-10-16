@@ -12,12 +12,14 @@ const mockGetPatience = vi.fn<(userEmail: string, date: string) => Promise<numbe
 const mockGetKv = vi.fn<(key: string) => Promise<string | null>>();
 const mockSetKv = vi.fn();
 const mockUseSyncStatus = vi.fn();
+const mockListPatience = vi.fn<() => Promise<unknown[]>>();
 
 vi.mock("@/lib/storage", () => ({
   listEntries: () => mockListEntries(),
   saveEntry: (...args: unknown[]) => mockSaveEntry(...args),
   deleteEntry: (...args: unknown[]) => mockDeleteEntry(...args),
   setMyPatience: (...args: unknown[]) => mockSetMyPatience(...args),
+  listPatience: () => mockListPatience(),
   getPatience: (userEmail: string, date: string) => mockGetPatience(userEmail, date),
   getKv: (key: string) => mockGetKv(key),
   setKv: (...args: unknown[]) => mockSetKv(...args),
@@ -37,6 +39,7 @@ function makeEntry(overrides: Partial<EntryRecord>): EntryRecord {
 beforeEach(() => {
   mockListEntries.mockResolvedValue([]);
   mockGetPatience.mockResolvedValue(0);
+  mockListPatience.mockResolvedValue([]);
   mockGetKv.mockResolvedValue(null);
   mockSetKv.mockResolvedValue(undefined);
   mockSaveEntry.mockResolvedValue(makeEntry({}));
@@ -191,5 +194,56 @@ describe("AppShell", () => {
     expect(data.endedAt).toBe(data.date);
     expect(mockSetKv).toHaveBeenCalledWith("alone-start", "");
     await waitFor(() => expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument());
+  });
+
+  it("zeigt die Geduld der anderen eingeklappt und klappt sie auf Wunsch mit Namen auf", async () => {
+    const today = new Date();
+    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    mockListPatience.mockResolvedValue([
+      { userEmail: "a@example.com", userName: "Anna", date, geduld: 2, updatedAt: 1 },
+      { userEmail: "b@example.com", userName: "Ben", date, geduld: 4, updatedAt: 1 },
+    ]);
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+
+    const toggle = await screen.findByRole("button", { name: "Geduld der anderen" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Ben")).not.toBeInTheDocument();
+
+    await user.click(toggle);
+
+    expect(screen.getByText("Ben")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "4 von 5" })).toBeInTheDocument();
+    expect(screen.queryByText("Anna")).not.toBeInTheDocument();
+  });
+
+  it("zeigt im Verlauf die Geduld mit dem Namen der jeweiligen Person", async () => {
+    mockListPatience.mockResolvedValue([
+      { userEmail: "a@example.com", userName: "Anna", date: "2026-03-05", geduld: 3, updatedAt: 1 },
+      { userEmail: "b@example.com", date: "2026-03-05", geduld: 5, updatedAt: 1 },
+    ]);
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+    await user.click(await screen.findByRole("button", { name: "Verlauf" }));
+
+    expect(await screen.findByText("Geduld · Anna")).toBeInTheDocument();
+    expect(screen.getByText("Geduld · b")).toBeInTheDocument();
+  });
+
+  it("laedt die Geduld nach einem Sync neu", async () => {
+    mockUseSyncStatus.mockReturnValue(syncInfo({ lastSyncAt: 1000 }));
+    render(<AppShell userEmail="a@example.com" />);
+    await waitFor(() => expect(mockListPatience.mock.calls.length).toBeGreaterThanOrEqual(2));
+  });
+
+  it("zeigt fuer andere Nutzer ohne Eintrag heute 0 von 5", async () => {
+    mockListPatience.mockResolvedValue([{ userEmail: "b@example.com", userName: "Ben", date: "2020-01-01", geduld: 4, updatedAt: 1 }]);
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+
+    await user.click(await screen.findByRole("button", { name: "Geduld der anderen" }));
+
+    expect(screen.getByText("Ben")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "0 von 5" })).toBeInTheDocument();
   });
 });

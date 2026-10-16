@@ -91,6 +91,10 @@ export async function setMyPatience(userEmail: string, date: string, geduld: num
   });
 }
 
+export async function listPatience(): Promise<PatienceRecord[]> {
+  return Object.values(await localDb.getAllPatience());
+}
+
 export async function getPendingCount(): Promise<number> {
   const q = await localDb.getQueue();
   return q.kv.length + q.entries.length + q.dailyPatience.length;

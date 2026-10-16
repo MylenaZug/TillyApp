@@ -10,6 +10,7 @@ export type EntryRecord = {
 
 export type PatienceRecord = {
   userEmail: string;
+  userName?: string;
   date: string;
   geduld: number;
   updatedAt: number;
