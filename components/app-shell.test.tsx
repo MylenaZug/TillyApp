@@ -147,4 +147,49 @@ describe("AppShell", () => {
     await user.click(screen.getByRole("button", { name: "Start" }));
     expect(screen.getByRole("radiogroup", { name: "Meine Geduld" })).toBeInTheDocument();
   });
+  it("bricht beim Klick auf das Tilly-Foto im Eintragsformular ab, ohne zu speichern", async () => {
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+    await user.click(await screen.findByText("Stuhlgang"));
+    expect(screen.queryByRole("radiogroup", { name: "Meine Geduld" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Start" }));
+
+    expect(await screen.findByRole("radiogroup", { name: "Meine Geduld" })).toBeInTheDocument();
+    expect(mockSaveEntry).not.toHaveBeenCalled();
+  });
+
+  it("zeigt die Alleine-Karte ueber den Notizen, solange kein Timer laeuft", async () => {
+    render(<AppShell userEmail="a@example.com" />);
+    const alone = await screen.findByText("Tilly allein zu Haus");
+    const notes = screen.getByText("Notizen");
+    expect(alone.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("schiebt die Alleine-Karte bei laufendem Timer ganz nach oben", async () => {
+    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? new Date(Date.now() - 5 * 60_000).toISOString() : null));
+    render(<AppShell userEmail="a@example.com" />);
+    const stop = await screen.findByRole("button", { name: "Stop" });
+    const heute = screen.getByText("Heute");
+    expect(stop.compareDocumentPosition(heute) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("speichert beim Stoppen Start, Ende und Dauer und beendet den Timer", async () => {
+    const startedAt = new Date(Date.now() - 90 * 60_000).toISOString();
+    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? startedAt : null));
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+
+    await user.click(await screen.findByRole("button", { name: "Stop" }));
+
+    await waitFor(() => expect(mockSaveEntry).toHaveBeenCalled());
+    const [id, type, data] = mockSaveEntry.mock.calls[0];
+    expect(id).toBeUndefined();
+    expect(type).toBe("alone");
+    expect(data.startedAt).toBe(startedAt);
+    expect(data.ms).toBeGreaterThanOrEqual(90 * 60_000);
+    expect(data.endedAt).toBe(data.date);
+    expect(mockSetKv).toHaveBeenCalledWith("alone-start", "");
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument());
+  });
 });

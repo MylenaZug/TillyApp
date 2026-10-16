@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clear } from "idb-keyval";
 import { localDb } from "@/lib/storage/local-db";
-import { runSync } from "@/lib/storage/sync";
+import { getLastSyncAt, runSync } from "@/lib/storage/sync";
 
 beforeEach(async () => {
   await clear();
@@ -83,5 +83,22 @@ describe("runSync", () => {
 
     // Ohne den syncing-Guard wuerde der zweite Aufruf weitere 2 fetch-Calls ausloesen.
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("merkt sich den Zeitpunkt des letzten erfolgreichen Syncs, aber nicht von fehlgeschlagenen", async () => {
+    const before = getLastSyncAt();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 } as Response));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await localDb.setQueue({ kv: [{ key: "a", value: "1", updatedAt: 1 }], entries: [], dailyPatience: [] });
+    await runSync();
+    expect(getLastSyncAt()).toBe(before);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ serverTime: 5, kv: [], entries: [], dailyPatience: [] }) } as unknown as Response),
+    );
+    const t0 = Date.now();
+    await runSync();
+    expect(getLastSyncAt()).toBeGreaterThanOrEqual(t0);
   });
 });
