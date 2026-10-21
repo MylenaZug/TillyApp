@@ -106,11 +106,14 @@ export function GalleryView() {
           Noch keine Fotos – leg das erste an.
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-3 gap-2">
           {photos.map((p) => (
-            <button key={p.id} onClick={() => setOpenPhoto(p)} className="aspect-square overflow-hidden rounded-lg bg-hairline">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/api/photos/${p.id}`} alt={p.note || ""} className="h-full w-full object-cover" loading="lazy" />
+            <button key={p.id} onClick={() => setOpenPhoto(p)} className="text-left">
+              <div className="aspect-square overflow-hidden rounded-lg bg-hairline">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/photos/${p.id}`} alt={p.note || ""} className="h-full w-full object-cover" loading="lazy" />
+              </div>
+              {p.note && <div className="mt-1 line-clamp-2 text-[11px] text-ink-soft">{p.note}</div>}
             </button>
           ))}
         </div>
