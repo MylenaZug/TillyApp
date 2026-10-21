@@ -315,14 +315,14 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   if (!ready) {
     return (
-      <div className="flex h-screen items-center justify-center bg-bg">
+      <div className="flex h-dvh items-center justify-center bg-bg">
         <PawTrailLoader />
       </div>
     );
   }
 
   return (
-    <div className="relative mx-auto flex h-screen max-w-[430px] flex-col overflow-hidden bg-bg">
+    <div className="relative mx-auto flex h-dvh max-w-[430px] flex-col overflow-hidden bg-bg">
       <span
         className={`absolute right-3 top-3 z-10 h-2.5 w-2.5 rounded-full ${
           status === "offline" ? "bg-rust" : status === "pending" ? "bg-amber" : "bg-sage"
@@ -409,7 +409,10 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       </div>
 
       {view !== "add" && (
-        <div className="relative shrink-0 border-t border-hairline px-5 pb-5 pt-3">
+        <div
+          className="relative shrink-0 border-t border-hairline px-5 pt-3"
+          style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 0px))" }}
+        >
           <div className="flex items-center justify-between">
             <NavButton icon={Home} label="Start" active={view === "home"} onClick={() => setView("home")} />
             <NavButton icon={Clock3} label="Verlauf" active={view === "history"} onClick={() => setView("history")} />
