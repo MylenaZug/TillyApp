@@ -1,4 +1,4 @@
-import { STRESS_LEVELS, TILLY_BIRTHDATE } from "./constants";
+import { LEGACY_STOOL_CONSISTENCY, STRESS_LEVELS, TILLY_BIRTHDATE } from "./constants";
 import type { AnyEntry } from "./types";
 
 export const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -82,6 +82,14 @@ export function stressLabelFor(level: number) {
   return STRESS_LEVELS[clamped - 1]?.label || "";
 }
 
+// consistency war frueher ein einzelner String, heute ein Array - und alte Bezeichnungen
+// werden auf die aktuellen gemappt (siehe LEGACY_STOOL_CONSISTENCY).
+export function stoolConsistency(entry: AnyEntry): string[] {
+  const raw = entry.consistency as unknown as string | string[] | undefined;
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return [...new Set(list.map((c) => LEGACY_STOOL_CONSISTENCY[c] ?? c))];
+}
+
 export function starGlyphs(n?: number) {
   const count = n || 0;
   return "★".repeat(count) + "☆".repeat(5 - count);
@@ -163,7 +171,7 @@ export function entrySummary(entry: AnyEntry): string {
   try {
     switch (entry.type) {
       case "stool": {
-        const consistency = Array.isArray(entry.consistency) ? entry.consistency : entry.consistency ? [entry.consistency] : [];
+        const consistency = stoolConsistency(entry);
         if (consistency.length === 0) return "Eintrag gespeichert";
         return `${consistency.join(", ")}${entry.stoolAmount ? " · " + entry.stoolAmount : ""}${entry.color ? " · " + entry.color : ""}`;
       }

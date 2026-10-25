@@ -372,6 +372,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             aloneStart={aloneStart}
             onStartAlone={() => void startAloneTimer()}
             onStopAlone={() => void stopAloneTimer()}
+            onEditEntry={(entry) => openAdd(entry.type, entry)}
           />
         )}
         {view === "history" && (

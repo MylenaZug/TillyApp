@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { BarChart, Bar, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CHART_COLORS, KOSTEN_CATEGORIES, STOOL_CONSISTENCY, STOOL_FLAGS, WEEKDAYS_DE, catMeta } from "@/lib/tilly/constants";
-import { daysAgo, fmtDate, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
+import { daysAgo, fmtDate, formatDuration, stoolConsistency, stressLabelFor } from "@/lib/tilly/helpers";
 import type { AnyEntry } from "@/lib/tilly/types";
 import { Chip } from "./ui";
 
@@ -113,7 +113,7 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
 
   const consistencyCounts = STOOL_CONSISTENCY.map((c) => ({
     label: c,
-    count: stoolEntries.filter((e) => (Array.isArray(e.consistency) ? e.consistency : e.consistency ? [e.consistency] : []).includes(c)).length,
+    count: stoolEntries.filter((e) => stoolConsistency(e).includes(c)).length,
   }));
   const flagCounts = STOOL_FLAGS.map((f) => ({
     label: f,

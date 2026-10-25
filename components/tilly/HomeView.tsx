@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Heart, Scale, StickyNote, Timer, UtensilsCrossed, Zap } from "lucide-react";
+import { Check, Clock3, Heart, Scale, StickyNote, Timer, UtensilsCrossed, Zap } from "lucide-react";
 import { ADDABLE_CATEGORIES, DAYTIME_OPTIONS, catMeta } from "@/lib/tilly/constants";
 import { daysAgo, entrySummary, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, Rating, TextArea } from "./ui";
+import { DayRow } from "./Calendar";
 
 const PATIENCE_ICON = { filled: "/icons/tilly/rating-patience-filled.png", empty: "/icons/tilly/rating-patience-empty.png" };
 const SHARK_ICON = { filled: "/icons/tilly/rating-shark-filled.png", empty: "/icons/tilly/rating-shark-empty.png" };
@@ -27,6 +28,7 @@ export function HomeView({
   aloneStart,
   onStartAlone,
   onStopAlone,
+  onEditEntry,
 }: {
   entries: AnyEntry[];
   onOpenAdd: (categoryId: CategoryId) => void;
@@ -44,6 +46,7 @@ export function HomeView({
   aloneStart: string | null;
   onStartAlone: () => void;
   onStopAlone: () => void;
+  onEditEntry: (entry: AnyEntry) => void;
 }) {
   // Nur der gestrige Eintrag zaehlt: hoher Stress gestern -> heute als Ruhetag vorschlagen
   const yesterdayStress = entries.find((e) => e.type === "stress" && daysAgo(e.date) === 1);
@@ -65,6 +68,11 @@ export function HomeView({
   }, [aloneStart]);
   const aloneElapsedMs = aloneStart ? Date.now() - new Date(aloneStart).getTime() : 0;
   const aloneLast = [...entries].filter((e) => e.type === "alone").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+  // Tagescheck steckt schon in der "Heute"-Karte und taucht hier deshalb nicht noch einmal auf.
+  const todayEntries = entries
+    .filter((e) => e.type !== "tagescheck" && daysAgo(e.date) === 0)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
     <div>
@@ -148,6 +156,21 @@ export function HomeView({
         ))}
       </div>
 
+      <div className="mb-4 rounded-2xl border border-hairline bg-card p-4">
+        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+          <Clock3 size={15} className="text-ink-soft" /> Verlauf heute
+        </div>
+        {todayEntries.length === 0 ? (
+          <div className="text-sm text-ink-soft">Heute noch nichts eingetragen.</div>
+        ) : (
+          <div className="space-y-2">
+            {todayEntries.map((e) => (
+              <DayRow key={e.id} entry={e} onClick={onEditEntry} />
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="mt-2 rounded-2xl border border-hairline bg-card p-4">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-sm font-semibold text-ink">
@@ -178,8 +201,17 @@ export function HomeView({
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3">
-            <div className="text-sm text-ink-soft">
-              {aloneLast ? `Zuletzt: ${entrySummary(aloneLast)}` : "Noch nicht erfasst"}
+            <div className="min-w-0 text-sm text-ink-soft">
+              {aloneLast ? (
+                <button onClick={() => onEditEntry(aloneLast)} className="text-left underline decoration-hairline underline-offset-2">
+                  Zuletzt: {entrySummary(aloneLast)}
+                </button>
+              ) : (
+                "Noch nicht erfasst"
+              )}
+              <button onClick={() => onOpenAdd("alone")} className="mt-1 block text-xs text-plum">
+                + Nachtragen
+              </button>
             </div>
             <button onClick={onStartAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
               Start
