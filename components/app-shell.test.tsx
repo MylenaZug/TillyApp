@@ -113,7 +113,8 @@ describe("AppShell", () => {
 
     render(<AppShell userEmail="a@example.com" />);
 
-    expect(await screen.findByText("Offline")).toBeInTheDocument();
+    // Status steckt seit dem Umbau auf den farbigen Punkt nur noch im Tooltip.
+    expect(await screen.findByTitle("a@example.com · Offline")).toBeInTheDocument();
   });
 
   it("zeigt die Anzahl ausstehender Aenderungen an", async () => {
@@ -121,6 +122,6 @@ describe("AppShell", () => {
 
     render(<AppShell userEmail="a@example.com" />);
 
-    expect(await screen.findByText("2 ausstehend")).toBeInTheDocument();
+    expect(await screen.findByTitle("a@example.com · 2 ausstehend")).toBeInTheDocument();
   });
 });
