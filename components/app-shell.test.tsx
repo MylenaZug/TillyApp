@@ -95,7 +95,7 @@ describe("AppShell", () => {
     expect(await screen.findByText("Keine Einträge in dieser Kategorie.")).toBeInTheDocument();
   });
 
-  it("stuerzt bei fehlerhaftem JSON in einem Eintrag nicht ab und zeigt einen Fallback-Text", async () => {
+  it("stuerzt bei fehlerhaftem JSON in einem Eintrag nicht ab und zeigt keinen Platzhalter-Text", async () => {
     mockListEntries.mockResolvedValue([makeEntry({ id: "broken", type: "food", data: "{not-json" })]);
     const user = userEvent.setup();
 
@@ -103,7 +103,9 @@ describe("AppShell", () => {
     await waitFor(() => expect(mockListEntries).toHaveBeenCalled());
     await user.click(screen.getByRole("button", { name: "Verlauf" }));
 
-    expect((await screen.findAllByText("Eintrag gespeichert")).length).toBeGreaterThan(0);
+    // Filter-Chip + Zeile in der Timeline
+    expect((await screen.findAllByText("Futter")).length).toBeGreaterThan(1);
+    expect(screen.queryByText("Eintrag gespeichert")).not.toBeInTheDocument();
   });
 
   it("zeigt den Offline-Status aus useSyncStatus an", async () => {

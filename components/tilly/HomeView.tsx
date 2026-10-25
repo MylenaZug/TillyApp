@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, Clock3, Heart, Scale, StickyNote, Timer, UtensilsCrossed, Zap } from "lucide-react";
 import { ADDABLE_CATEGORIES, DAYTIME_OPTIONS, catMeta } from "@/lib/tilly/constants";
-import { daysAgo, entrySummary, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
+import { daysAgo, entrySummary, fmtDateTime, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, Rating, TextArea } from "./ui";
 import { DayRow } from "./Calendar";
@@ -204,7 +204,7 @@ export function HomeView({
             <div className="min-w-0 text-sm text-ink-soft">
               {aloneLast ? (
                 <button onClick={() => onEditEntry(aloneLast)} className="text-left underline decoration-hairline underline-offset-2">
-                  Zuletzt: {entrySummary(aloneLast)}
+                  Zuletzt: {entrySummary(aloneLast) || fmtDateTime(aloneLast.date)}
                 </button>
               ) : (
                 "Noch nicht erfasst"

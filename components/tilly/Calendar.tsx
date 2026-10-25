@@ -23,7 +23,7 @@ export function DayRow({ entry, onClick }: { entry: AnyEntry; onClick?: (entry: 
         </div>
         {showTime && <span className="text-[11px] text-ink-soft">{fmtTime(entry.date)}</span>}
       </div>
-      <div className="mt-0.5 break-words text-[13px] text-ink-soft">{entrySummary(entry)}</div>
+      {entrySummary(entry) && <div className="mt-0.5 break-words text-[13px] text-ink-soft">{entrySummary(entry)}</div>}
       {entry.note && <div className="mt-1 break-words text-[12px] italic text-ink-soft">„{entry.note}"</div>}
     </Wrapper>
   );
@@ -175,7 +175,7 @@ export function TimelineRow({ entry, onClick }: { entry: AnyEntry; onClick: () =
               : new Date(entry.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}
           </span>
         </div>
-        <div className="mt-0.5 break-words text-[13px] text-ink-soft">{entrySummary(entry)}</div>
+        {entrySummary(entry) && <div className="mt-0.5 break-words text-[13px] text-ink-soft">{entrySummary(entry)}</div>}
       </div>
     </button>
   );
