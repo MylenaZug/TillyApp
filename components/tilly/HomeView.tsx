@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { Check, Clock3, Heart, Scale, StickyNote, Timer, UtensilsCrossed, Zap } from "lucide-react";
 import { ADDABLE_CATEGORIES, DAYTIME_OPTIONS, catMeta } from "@/lib/tilly/constants";
-import { daysAgo, entrySummary, fmtDateTime, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
+import { dateKey, daysAgo, entrySummary, fmtDateTime, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, FoodPlanSlots } from "@/lib/tilly/types";
+import type { PatienceRecord } from "@/lib/storage/types";
 import { CatIcon, Rating, TextArea } from "./ui";
-import { DayRow } from "./Calendar";
+import { DayRow, PatienceStars, patienceName } from "./Calendar";
 
 const PATIENCE_ICON = { filled: "/icons/tilly/rating-patience-filled.png", empty: "/icons/tilly/rating-patience-empty.png" };
 const SHARK_ICON = { filled: "/icons/tilly/rating-shark-filled.png", empty: "/icons/tilly/rating-shark-empty.png" };
@@ -17,6 +18,8 @@ export function HomeView({
   folgsamkeit,
   energie,
   patience,
+  userEmail,
+  allPatience,
   onUpdateFolgsamkeit,
   onUpdateEnergie,
   onUpdatePatience,
@@ -35,6 +38,8 @@ export function HomeView({
   folgsamkeit: number;
   energie: number;
   patience: number;
+  userEmail: string;
+  allPatience: PatienceRecord[];
   onUpdateFolgsamkeit: (value: number) => void;
   onUpdateEnergie: (value: number) => void;
   onUpdatePatience: (value: number) => void;
@@ -66,6 +71,21 @@ export function HomeView({
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, [aloneStart]);
+  const [othersOpen, setOthersOpen] = useState(false);
+  const todayKey = dateKey(new Date());
+  // Bekannt sind andere Nutzer nur durch fruehere Eintraege; ohne Eintrag heute gilt 0/5.
+  const others = Object.values(
+    allPatience
+      .filter((r) => r.userEmail !== userEmail)
+      .reduce<Record<string, PatienceRecord>>((acc, r) => {
+        const cur = acc[r.userEmail];
+        const isToday = r.date === todayKey;
+        if (!cur || isToday || (cur.date !== todayKey && r.date > cur.date)) {
+          acc[r.userEmail] = isToday ? r : { ...r, geduld: 0 };
+        }
+        return acc;
+      }, {}),
+  ).sort((a, b) => patienceName(a).localeCompare(patienceName(b)));
   const aloneElapsedMs = aloneStart ? Date.now() - new Date(aloneStart).getTime() : 0;
   const aloneLast = [...entries].filter((e) => e.type === "alone").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
@@ -74,8 +94,44 @@ export function HomeView({
     .filter((e) => e.type !== "tagescheck" && daysAgo(e.date) === 0)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  const aloneCard = (
+    <div className="mb-4 rounded-2xl border border-hairline bg-card p-4">
+      <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+        <Timer size={15} className="text-plum" /> {catMeta("alone").label}
+      </div>
+      {aloneStart ? (
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-2xl font-bold tabular-nums text-ink">{formatDuration(aloneElapsedMs)}</div>
+          <button onClick={onStopAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
+            Stop
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 text-sm text-ink-soft">
+            {aloneLast ? (
+              <button onClick={() => onEditEntry(aloneLast)} className="text-left underline decoration-hairline underline-offset-2">
+                Zuletzt: {entrySummary(aloneLast) || fmtDateTime(aloneLast.date)}
+              </button>
+            ) : (
+              "Noch nicht erfasst"
+            )}
+            <button onClick={() => onOpenAdd("alone")} className="mt-1 block text-xs text-plum">
+              + Nachtragen
+            </button>
+          </div>
+          <button onClick={onStartAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
+            Start
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div>
+      {aloneStart && aloneCard}
+
       {showStressAlert && (
         <div className="mb-4 flex items-center gap-2 rounded-2xl bg-amber-soft px-4 py-3">
           <Zap size={16} className="text-amber" />
@@ -138,7 +194,28 @@ export function HomeView({
         </div>
         <Rating label="Folgsamkeit" value={folgsamkeit} onChange={onUpdateFolgsamkeit} colorClass="text-gold" />
         <div className="h-px bg-hairline" />
-        <Rating label="Meine Geduld" value={patience} onChange={onUpdatePatience} icon={PATIENCE_ICON} colorClass="text-rose" />
+        <Rating
+          label="Meine Geduld"
+          value={patience}
+          onChange={onUpdatePatience}
+          icon={PATIENCE_ICON}
+          colorClass="text-rose"
+          toggle={{ open: othersOpen, onToggle: () => setOthersOpen((o) => !o), controls: "other-patience", ariaLabel: "Geduld der anderen" }}
+        />
+        {othersOpen && (
+          <div id="other-patience" className="space-y-1 pb-1.5">
+            {others.length === 0 ? (
+              <div className="text-xs text-ink-soft">Noch keine anderen Nutzer.</div>
+            ) : (
+              others.map((r) => (
+                <div key={r.userEmail} className="flex items-center justify-between">
+                  <span className="text-sm text-ink-soft">{patienceName(r)}</span>
+                  <PatienceStars value={r.geduld} size={22} />
+                </div>
+              ))
+            )}
+          </div>
+        )}
         <div className="h-px bg-hairline" />
         <Rating label="Sharklevel" value={energie} onChange={onUpdateEnergie} icon={SHARK_ICON} colorClass="text-amber" />
       </div>
@@ -170,6 +247,7 @@ export function HomeView({
           </div>
         )}
       </div>
+      {!aloneStart && aloneCard}
 
       <div className="mt-2 rounded-2xl border border-hairline bg-card p-4">
         <div className="mb-2 flex items-center justify-between">
@@ -186,38 +264,6 @@ export function HomeView({
           placeholder="Für alles, was sonst nirgends reinpasst – z. B. Erinnerungen für einander…"
           rows={3}
         />
-      </div>
-
-      <div className="mt-2 rounded-2xl border border-hairline bg-card p-4">
-        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
-          <Timer size={15} className="text-plum" /> {catMeta("alone").label}
-        </div>
-        {aloneStart ? (
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-2xl font-bold tabular-nums text-ink">{formatDuration(aloneElapsedMs)}</div>
-            <button onClick={onStopAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
-              Stop
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 text-sm text-ink-soft">
-              {aloneLast ? (
-                <button onClick={() => onEditEntry(aloneLast)} className="text-left underline decoration-hairline underline-offset-2">
-                  Zuletzt: {entrySummary(aloneLast) || fmtDateTime(aloneLast.date)}
-                </button>
-              ) : (
-                "Noch nicht erfasst"
-              )}
-              <button onClick={() => onOpenAdd("alone")} className="mt-1 block text-xs text-plum">
-                + Nachtragen
-              </button>
-            </div>
-            <button onClick={onStartAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
-              Start
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -13,7 +13,7 @@ export type CategoryMeta = {
   hex: string;
   hexSoft: string;
   // Nur gesetzt, wenn "bg" zu hell fuer weissen Text ist (z.B. das helle Gold bei
-  // "symptom") - Chip faellt sonst auf text-white als aktive Textfarbe zurueck.
+  // "weight") - Chip faellt sonst auf text-white als aktive Textfarbe zurueck.
   activeText?: string;
 };
 
@@ -21,10 +21,10 @@ const ICON = (name: string) => `/icons/tilly/${name}.png`;
 
 export const CATEGORIES: CategoryMeta[] = [
   { id: "food", label: "Futter", icon: ICON("category-food"), text: "text-sage", bg: "bg-sage", border: "border-sage", soft: "bg-sage-soft", hex: "#0E7C86", hexSoft: "#D8EAEA" },
-  { id: "stool", label: "Stuhlgang", icon: ICON("category-stool"), text: "text-rust", bg: "bg-rust", border: "border-rust", soft: "bg-rust-soft", hex: "#C0392B", hexSoft: "#F5DAD6" },
+  { id: "stool", label: "Stuhlgang", icon: ICON("category-stool"), text: "text-brown", bg: "bg-brown", border: "border-brown", soft: "bg-brown-soft", hex: "#7B4B2A", hexSoft: "#EADFD5" },
   { id: "training", label: "Training", icon: ICON("category-training"), text: "text-gold", bg: "bg-gold", border: "border-gold", soft: "bg-gold-soft", hex: "#2E8B57", hexSoft: "#DCEEE2" },
   { id: "stress", label: "Stress", icon: ICON("category-stress"), text: "text-amber", bg: "bg-amber", border: "border-amber", soft: "bg-amber-soft", hex: "#3457D5", hexSoft: "#DCE3F8" },
-  { id: "symptom", label: "Auffälligkeit", icon: ICON("category-symptom"), text: "text-berry", bg: "bg-berry", border: "border-berry", soft: "bg-berry-soft", hex: "#E6B800", hexSoft: "#FBF0C9", activeText: "text-ink" },
+  { id: "symptom", label: "Auffälligkeit", icon: ICON("category-symptom"), text: "text-berry", bg: "bg-berry", border: "border-berry", soft: "bg-berry-soft", hex: "#C0392B", hexSoft: "#F5DAD6" },
   { id: "weight", label: "Gewicht", icon: ICON("category-weight"), text: "text-teal", bg: "bg-teal", border: "border-teal", soft: "bg-teal-soft", hex: "#B8860B", hexSoft: "#F3E7C9", activeText: "text-ink" },
   { id: "vet", label: "Tierarzt", icon: ICON("category-vet"), text: "text-plum", bg: "bg-plum", border: "border-plum", soft: "bg-plum-soft", hex: "#7A5C8E", hexSoft: "#EAE3F0" },
   { id: "kosten", label: "Kosten", icon: ICON("category-kosten"), text: "text-slate", bg: "bg-slate", border: "border-slate", soft: "bg-slate-soft", hex: "#546A7B", hexSoft: "#DCE4E8" },

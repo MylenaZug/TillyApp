@@ -5,6 +5,7 @@ const config: Config = {
   content: [
     "./app/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}",
+    "./lib/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
@@ -26,8 +27,10 @@ const config: Config = {
         "rust-soft": "#F5DAD6",
         amber: "#3457D5",
         "amber-soft": "#DCE3F8",
-        berry: "#E6B800",
-        "berry-soft": "#FBF0C9",
+        brown: "#7B4B2A",
+        "brown-soft": "#EADFD5",
+        berry: "#C0392B",
+        "berry-soft": "#F5DAD6",
         slate: "#546A7B",
         "slate-soft": "#DCE4E8",
         rose: "#B5537A",

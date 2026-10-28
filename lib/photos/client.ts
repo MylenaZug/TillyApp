@@ -1,10 +1,14 @@
-export type PhotoMeta = { id: string; filename: string; note: string | null; uploadedBy: string; createdAt: number; deleted: number };
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
-export async function listPhotos(): Promise<PhotoMeta[]> {
-  const res = await fetch("/api/photos");
+export type PhotoMeta = { id: string; note: string | null; uploadedBy: string; createdAt: number; mine: boolean };
+
+export const photoUrl = (id: string) => `/api/photos/${id}`;
+export const thumbUrl = (id: string) => `/api/photos/${id}?size=thumb`;
+
+export async function listPhotos(before?: number): Promise<{ photos: PhotoMeta[]; hasMore: boolean }> {
+  const res = await fetch(before ? `/api/photos?before=${before}` : "/api/photos");
   if (!res.ok) throw new Error("Fotos konnten nicht geladen werden");
-  const data = await res.json();
-  return data.photos as PhotoMeta[];
+  return (await res.json()) as { photos: PhotoMeta[]; hasMore: boolean };
 }
 
 // XHR statt fetch, damit echter Upload-Fortschritt angezeigt werden kann (fetch hat dafuer
@@ -32,7 +36,12 @@ export function uploadPhoto(file: Blob, note: string, onProgress?: (pct: number)
           reject(new Error("Antwort konnte nicht gelesen werden"));
         }
       } else {
-        reject(new Error(`Upload fehlgeschlagen (${xhr.status})`));
+        const messages: Record<number, string> = {
+          401: "Bitte erneut anmelden",
+          413: "Das Foto ist größer als 5 MB",
+          415: "Dieses Bildformat wird nicht unterstützt (erlaubt: JPG, PNG, WebP, GIF)",
+        };
+        reject(new Error(messages[xhr.status] ?? `Upload fehlgeschlagen (${xhr.status})`));
       }
     };
     xhr.onerror = () => reject(new Error("Upload fehlgeschlagen - bist du online?"));
@@ -40,6 +49,16 @@ export function uploadPhoto(file: Blob, note: string, onProgress?: (pct: number)
 
     xhr.send(form);
   });
+}
+
+export async function updatePhotoNote(id: string, note: string): Promise<string | null> {
+  const res = await fetch(`/api/photos/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ note }),
+  });
+  if (!res.ok) throw new Error("Notiz konnte nicht gespeichert werden");
+  return ((await res.json()) as { note: string | null }).note;
 }
 
 export async function deletePhoto(id: string): Promise<void> {

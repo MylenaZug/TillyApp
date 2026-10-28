@@ -1,16 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getPendingCount, onStorageChange, runSync, setupAutoSync } from "@/lib/storage";
+import { useCallback, useEffect, useState } from "react";
+import { getLastSyncAt, getPendingCount, onStorageChange, runSync, setupAutoSync } from "@/lib/storage";
 
 export type SyncStatus = "offline" | "pending" | "synced";
 
-export function useSyncStatus(): { status: SyncStatus; pending: number } {
+export type SyncInfo = {
+  status: SyncStatus;
+  pending: number;
+  lastSyncAt: number | null;
+  syncing: boolean;
+  syncNow: () => Promise<void>;
+};
+
+export function useSyncStatus(): SyncInfo {
   const [pending, setPending] = useState(0);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(getLastSyncAt());
+  const [syncing, setSyncing] = useState(false);
   const [online, setOnline] = useState(true);
 
   useEffect(() => {
-    const refreshPending = () => void getPendingCount().then(setPending);
+    const refreshPending = () => {
+      void getPendingCount().then(setPending);
+      setLastSyncAt(getLastSyncAt());
+    };
     refreshPending();
     const unsubscribe = onStorageChange(refreshPending);
 
@@ -33,6 +46,15 @@ export function useSyncStatus(): { status: SyncStatus; pending: number } {
     };
   }, []);
 
+  const syncNow = useCallback(async () => {
+    setSyncing(true);
+    try {
+      await runSync();
+    } finally {
+      setSyncing(false);
+    }
+  }, []);
+
   const status: SyncStatus = !online ? "offline" : pending > 0 ? "pending" : "synced";
-  return { status, pending };
+  return { status, pending, lastSyncAt, syncing, syncNow };
 }

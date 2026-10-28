@@ -1,6 +1,7 @@
 "use client";
 
 import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
+import { ChevronDown } from "lucide-react";
 import type { CategoryMeta } from "@/lib/tilly/constants";
 
 export function CatIcon({ cat, size = 16 }: { cat: CategoryMeta; size?: number }) {
@@ -82,16 +83,31 @@ export function Rating({
   onChange,
   colorClass = "text-gold",
   icon,
+  toggle,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
   colorClass?: string;
   icon?: StarIconSrc;
+  toggle?: { open: boolean; onToggle: () => void; controls: string; ariaLabel: string };
 }) {
   return (
     <div className="flex items-center justify-between py-1.5">
-      <span className="text-sm text-ink-soft">{label}</span>
+      {toggle ? (
+        <button
+          onClick={toggle.onToggle}
+          aria-expanded={toggle.open}
+          aria-controls={toggle.controls}
+          aria-label={toggle.ariaLabel}
+          className="flex items-center gap-1 py-1.5 text-sm text-ink-soft"
+        >
+          {label}
+          <ChevronDown size={16} className={`transition-transform ${toggle.open ? "rotate-180" : ""}`} />
+        </button>
+      ) : (
+        <span className="text-sm text-ink-soft">{label}</span>
+      )}
       <div className="flex" role="radiogroup" aria-label={label}>
         {[1, 2, 3, 4, 5].map((score) => (
           <button

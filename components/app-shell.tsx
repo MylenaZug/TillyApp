@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, BookOpen, Clock3, Home, Images, Plus, X } from "lucide-react";
+import { BarChart3, BookOpen, Clock3, Images, Plus, X } from "lucide-react";
 import {
   deleteEntry,
   getKv,
   getPatience,
+  listPatience,
   listEntries,
   saveEntry,
   setKv,
   setMyPatience,
 } from "@/lib/storage";
-import { useSyncStatus, type SyncStatus } from "@/lib/storage/useSyncStatus";
-import type { EntryRecord } from "@/lib/storage/types";
+import { useSyncStatus } from "@/lib/storage/useSyncStatus";
+import { SyncButton } from "@/components/tilly/SyncButton";
+import type { EntryRecord, PatienceRecord } from "@/lib/storage/types";
 import { ADDABLE_CATEGORIES, SYMPTOM_CATEGORIES, catMeta } from "@/lib/tilly/constants";
 import { daysAgo, dateKey, formatDuration, nowLocalISO, tillyAge, weightFeedback } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
@@ -25,12 +27,6 @@ import { GalleryView } from "@/components/tilly/GalleryView";
 import { EntryForm } from "@/components/tilly/EntryForm";
 
 const DEFAULT_TRAINING_TYPES = ["Sitz", "Leinenführigkeit", "Rückruf"];
-
-function statusLabel(status: SyncStatus, pending: number) {
-  if (status === "offline") return "Offline";
-  if (status === "pending") return `${pending} ausstehend`;
-  return "Synchronisiert";
-}
 
 function parseEntryRecord(record: EntryRecord): AnyEntry {
   try {
@@ -52,7 +48,7 @@ function NavButton({
   active,
   onClick,
 }: {
-  icon: typeof Home;
+  icon: typeof Clock3;
   label: string;
   active: boolean;
   onClick: () => void;
@@ -83,6 +79,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const foodPlanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const foodPlanSlotsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [patience, setPatience] = useState(0);
+  const [allPatience, setAllPatience] = useState<PatienceRecord[]>([]);
   const [aloneStart, setAloneStart] = useState<string | null>(null);
 
   const [view, setView] = useState<View>("home");
@@ -93,7 +90,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const [toast, setToast] = useState("");
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { status, pending } = useSyncStatus();
+  const sync = useSyncStatus();
 
   async function refresh() {
     const records = await listEntries();
@@ -125,13 +122,19 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         // kv_store - hier nur noch laden, kein Runtime-Merge/Seed im Client mehr noetig.
         if (ex) setExercises(JSON.parse(ex));
 
-        await Promise.all([refresh(), getPatience(userEmail, dateKey(new Date())).then(setPatience)]);
+        await Promise.all([refresh(), getPatience(userEmail, dateKey(new Date())).then(setPatience), listPatience().then(setAllPatience)]);
       } finally {
         setReady(true);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail]);
+
+  // Geduld der anderen kommt per Sync - nach jedem erfolgreichen Sync neu einlesen.
+  useEffect(() => {
+    if (!sync.lastSyncAt) return;
+    void listPatience().then(setAllPatience);
+  }, [sync.lastSyncAt]);
 
   function showToast(message: string) {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -215,6 +218,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   async function updatePatience(value: number) {
     setPatience(value);
     await setMyPatience(userEmail, dateKey(new Date()), value);
+    setAllPatience(await listPatience());
   }
 
   function handleNoteChange(text: string) {
@@ -279,14 +283,14 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   }
 
   async function startAloneTimer() {
-    const iso = nowLocalISO();
+    const iso = new Date().toISOString();
     setAloneStart(iso);
     await setKv("alone-start", iso);
   }
 
   async function stopAloneTimer() {
     if (!aloneStart) return;
-    const endedAt = nowLocalISO();
+    const endedAt = new Date().toISOString();
     const ms = new Date(endedAt).getTime() - new Date(aloneStart).getTime();
     setAloneStart(null);
     await setKv("alone-start", "");
@@ -323,18 +327,17 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   return (
     <div className="relative mx-auto flex h-dvh max-w-[430px] flex-col overflow-hidden bg-bg">
-      <span
-        className={`absolute right-3 top-3 z-10 h-2.5 w-2.5 rounded-full ${
-          status === "offline" ? "bg-rust" : status === "pending" ? "bg-amber" : "bg-sage"
-        }`}
-        title={`${userEmail} · ${statusLabel(status, pending)}`}
-      />
       <div className="flex shrink-0 items-center justify-between px-5 pb-3 pt-5">
         <div className="flex items-center gap-2">
-          <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border-2 border-gold">
+          {/* Beim Erstellen/Bearbeiten bricht der Home-Button ab (wie das X), speichert also nicht. */}
+          <button
+            onClick={() => (view === "add" ? closeForm() : setView("home"))}
+            aria-label="Start"
+            className="h-11 w-11 shrink-0 overflow-hidden rounded-full border-2 border-gold"
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/tilly-photo.jpg" alt="Tilly" className="h-full w-full object-cover" />
-          </div>
+          </button>
           <div>
             <div className="text-lg font-bold leading-none text-ink">Tilly</div>
             <div className="text-[11px] text-ink-soft">
@@ -342,15 +345,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             </div>
           </div>
         </div>
-        {view !== "add" && (
-          <button
-            onClick={() => setView(view === "exercises" ? "home" : "exercises")}
-            className={`flex items-center gap-2 rounded-full border border-hairline px-4 py-3 ${view === "exercises" ? "bg-ink" : "bg-card"}`}
-          >
-            <BookOpen size={20} className={view === "exercises" ? "text-white" : "text-ink"} />
-            <span className={`text-sm font-medium ${view === "exercises" ? "text-white" : "text-ink"}`}>Übungen</span>
-          </button>
-        )}
+        <SyncButton {...sync} userEmail={userEmail} />
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-3">
@@ -361,6 +356,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             folgsamkeit={todayCheck?.folgsamkeit || 0}
             energie={todayCheck?.energie || 0}
             patience={patience}
+            userEmail={userEmail}
+            allPatience={allPatience}
             onUpdateFolgsamkeit={(v) => void updateTodayCheck("folgsamkeit", v)}
             onUpdateEnergie={(v) => void updateTodayCheck("energie", v)}
             onUpdatePatience={(v) => void updatePatience(v)}
@@ -376,7 +373,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           />
         )}
         {view === "history" && (
-          <HistoryView entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
+          <HistoryView patience={allPatience} entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
         )}
         {view === "analysis" && <AnalysisView entries={entries} onAddWeight={() => openAdd("weight")} />}
         {view === "gallery" && <GalleryView />}
@@ -415,11 +412,11 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 0px))" }}
         >
           <div className="flex items-center justify-between">
-            <NavButton icon={Home} label="Start" active={view === "home"} onClick={() => setView("home")} />
-            <NavButton icon={Clock3} label="Verlauf" active={view === "history"} onClick={() => setView("history")} />
-            <div className="w-11 shrink-0" />
-            <NavButton icon={BarChart3} label="Auswertung" active={view === "analysis"} onClick={() => setView("analysis")} />
+            <NavButton icon={BookOpen} label="Übungen" active={view === "exercises"} onClick={() => setView("exercises")} />
             <NavButton icon={Images} label="Galerie" active={view === "gallery"} onClick={() => setView("gallery")} />
+            <div className="w-11 shrink-0" />
+            <NavButton icon={Clock3} label="Verlauf" active={view === "history"} onClick={() => setView("history")} />
+            <NavButton icon={BarChart3} label="Auswertung" active={view === "analysis"} onClick={() => setView("analysis")} />
           </div>
           {view !== "home" && (
             <button
@@ -467,4 +464,3 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     </div>
   );
 }
-

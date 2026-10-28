@@ -2,7 +2,7 @@ import { localDb } from "./local-db";
 import { onStorageChange, runSync } from "./sync";
 import type { EntryRecord, KvMutation, PatienceRecord } from "./types";
 
-export { onStorageChange, runSync, setupAutoSync } from "./sync";
+export { getLastSyncAt, onStorageChange, runSync, setupAutoSync } from "./sync";
 
 function now() {
   return Date.now();
@@ -89,6 +89,10 @@ export async function setMyPatience(userEmail: string, date: string, geduld: num
     q.dailyPatience = q.dailyPatience.filter((r) => r.date !== date);
     q.dailyPatience.push({ date, geduld, updatedAt: row.updatedAt });
   });
+}
+
+export async function listPatience(): Promise<PatienceRecord[]> {
+  return Object.values(await localDb.getAllPatience());
 }
 
 export async function getPendingCount(): Promise<number> {

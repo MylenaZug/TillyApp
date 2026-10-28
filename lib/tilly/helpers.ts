@@ -199,7 +199,7 @@ export function entrySummary(entry: AnyEntry): string {
         return `Folgsamkeit ${starGlyphs(entry.folgsamkeit)} · Sharklevel ${starGlyphs(entry.energie)}`;
       case "alone":
         if (entry.ms === undefined || !entry.startedAt || !entry.endedAt) return "";
-        return `${formatDuration(entry.ms)} (${fmtTime(entry.startedAt)}–${fmtTime(entry.endedAt)})`;
+        return `${formatDuration(entry.ms)} · ${fmtTime(entry.startedAt)}–${fmtTime(entry.endedAt)} Uhr`;
       default:
         return "";
     }

@@ -70,6 +70,20 @@ describe("GET /api/sync", () => {
     expect(body.kv).toHaveLength(1);
     expect(body.kv[0].key).toBe("new");
   });
+
+  it("liefert die Geduld aller Accounts samt Anzeigename", async () => {
+    process.env.USER_DISPLAY_NAMES = JSON.stringify({ "a@example.com": "Anna" });
+    mockAuth.mockResolvedValue({ user: { email: "a@example.com" } });
+    sqlite.exec(
+      "INSERT INTO daily_patience (user_email, date, geduld, updated_at) VALUES ('a@example.com', '2026-09-18', 3, 10), ('ben@example.com', '2026-09-18', 5, 10)",
+    );
+
+    const body = await (await GET(new NextRequest("http://localhost/api/sync"))).json();
+
+    const byEmail = Object.fromEntries(body.dailyPatience.map((r: { userEmail: string; userName: string }) => [r.userEmail, r.userName]));
+    expect(byEmail).toEqual({ "a@example.com": "Anna", "ben@example.com": "ben" });
+    delete process.env.USER_DISPLAY_NAMES;
+  });
 });
 
 describe("POST /api/sync", () => {
