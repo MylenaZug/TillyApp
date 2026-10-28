@@ -1,6 +1,7 @@
 import { localDb } from "./local-db";
 import { onStorageChange, runSync } from "./sync";
 import type { EntryRecord, KvMutation, PatienceRecord } from "./types";
+import { normalizeAloneData } from "@/lib/tilly/alone";
 
 export { getLastSyncAt, onStorageChange, runSync, setupAutoSync } from "./sync";
 
@@ -43,10 +44,21 @@ export async function listEntries(): Promise<EntryRecord[]> {
 }
 
 export async function saveEntry(id: string | undefined, type: string, data: unknown): Promise<EntryRecord> {
+  let serializedData = JSON.stringify(data);
+  let startDatetime: string | null = null;
+  let endDatetime: string | null = null;
+  if (type === "alone" && data && typeof data === "object") {
+    const normalized = normalizeAloneData(data as Record<string, unknown>);
+    serializedData = JSON.stringify(normalized.data);
+    startDatetime = normalized.startDatetime;
+    endDatetime = normalized.endDatetime;
+  }
   const row: EntryRecord = {
     id: id || uid(),
     type,
-    data: JSON.stringify(data),
+    data: serializedData,
+    startDatetime,
+    endDatetime,
     updatedAt: now(),
     deleted: 0,
   };
@@ -65,6 +77,8 @@ export async function deleteEntry(id: string) {
     id,
     type: existing?.type || "",
     data: existing?.data || "{}",
+    startDatetime: existing?.startDatetime,
+    endDatetime: existing?.endDatetime,
     updatedAt: now(),
     deleted: 1,
   };

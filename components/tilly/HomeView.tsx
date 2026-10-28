@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, Clock3, Heart, Scale, StickyNote, Timer, UtensilsCrossed, Zap } from "lucide-react";
 import { ADDABLE_CATEGORIES, DAYTIME_OPTIONS, catMeta } from "@/lib/tilly/constants";
-import { dateKey, daysAgo, entrySummary, fmtDateTime, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
+import { dateForOffset, dateKey, entrySummary, fmtDateTime, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, FoodPlanSlots } from "@/lib/tilly/types";
 import type { PatienceRecord } from "@/lib/storage/types";
 import { CatIcon, Rating, TextArea } from "./ui";
@@ -53,14 +53,16 @@ export function HomeView({
   onStopAlone: () => void;
   onEditEntry: (entry: AnyEntry) => void;
 }) {
+  const todayKey = dateKey(new Date());
+  const yesterdayKey = dateKey(dateForOffset(1));
   // Nur der gestrige Eintrag zaehlt: hoher Stress gestern -> heute als Ruhetag vorschlagen
-  const yesterdayStress = entries.find((e) => e.type === "stress" && daysAgo(e.date) === 1);
+  const yesterdayStress = entries.find((e) => e.type === "stress" && dateKey(e.date) === yesterdayKey);
   const showStressAlert = !!yesterdayStress && (yesterdayStress.level || 0) >= 2;
   const stressLabel = yesterdayStress ? stressLabelFor(yesterdayStress.level || 0) : "";
 
-  const showWeightReminder = !entries.some((e) => e.type === "weight" && daysAgo(e.date) === 0);
+  const showWeightReminder = !entries.some((e) => e.type === "weight" && dateKey(e.date) === todayKey);
 
-  const todayFoodEntries = entries.filter((e) => e.type === "food" && daysAgo(e.date) === 0);
+  const todayFoodEntries = entries.filter((e) => e.type === "food" && dateKey(e.date) === todayKey);
   const foodSlotsToday = DAYTIME_OPTIONS.filter((d) => foodPlanSlots[d]?.food?.trim());
 
   // Erzwingt jede Sekunde einen Re-Render, waehrend der Alleine-Timer laeuft, damit die
@@ -72,7 +74,6 @@ export function HomeView({
     return () => clearInterval(id);
   }, [aloneStart]);
   const [othersOpen, setOthersOpen] = useState(false);
-  const todayKey = dateKey(new Date());
   // Bekannt sind andere Nutzer nur durch fruehere Eintraege; ohne Eintrag heute gilt 0/5.
   const others = Object.values(
     allPatience
@@ -91,7 +92,7 @@ export function HomeView({
 
   // Tagescheck steckt schon in der "Heute"-Karte und taucht hier deshalb nicht noch einmal auf.
   const todayEntries = entries
-    .filter((e) => e.type !== "tagescheck" && daysAgo(e.date) === 0)
+    .filter((e) => e.type !== "tagescheck" && dateKey(e.date) === todayKey)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const aloneCard = (

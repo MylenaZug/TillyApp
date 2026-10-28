@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react";
 import { BarChart, Bar, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CHART_COLORS, KOSTEN_CATEGORIES, STOOL_CONSISTENCY, STOOL_FLAGS, WEEKDAYS_DE, catMeta } from "@/lib/tilly/constants";
 import { daysAgo, fmtDate, formatDuration, stoolConsistency, stressLabelFor } from "@/lib/tilly/helpers";
+import { aloneDurationMs } from "@/lib/tilly/alone";
 import type { AnyEntry } from "@/lib/tilly/types";
 import { Chip } from "./ui";
 
@@ -104,7 +105,7 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
     total: kostenEntries.filter((e) => e.category === cat).reduce((s, e) => s + (Number(e.amount) || 0), 0),
   })).filter((c) => c.total > 0);
   const aloneEntries = entries.filter((e) => e.type === "alone" && inRange(e));
-  const aloneTotalMs = aloneEntries.reduce((s, e) => s + (e.ms || 0), 0);
+  const aloneTotalMs = aloneEntries.reduce((s, e) => s + aloneDurationMs(e.startDatetime, e.endDatetime), 0);
   const weightEntries = entries.filter((e) => e.type === "weight" && inRange(e));
   const weightChartData = [...weightEntries]
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())

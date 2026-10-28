@@ -1,4 +1,5 @@
 import { LEGACY_STOOL_CONSISTENCY, STRESS_LEVELS, TILLY_BIRTHDATE } from "./constants";
+import { aloneDurationMs } from "./alone";
 import type { AnyEntry } from "./types";
 
 export const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -198,8 +199,8 @@ export function entrySummary(entry: AnyEntry): string {
       case "tagescheck":
         return `Folgsamkeit ${starGlyphs(entry.folgsamkeit)} · Sharklevel ${starGlyphs(entry.energie)}`;
       case "alone":
-        if (entry.ms === undefined || !entry.startedAt || !entry.endedAt) return "";
-        return `${formatDuration(entry.ms)} · ${fmtTime(entry.startedAt)}–${fmtTime(entry.endedAt)} Uhr`;
+        if (!entry.startDatetime || !entry.endDatetime) return "";
+        return `${formatDuration(aloneDurationMs(entry.startDatetime, entry.endDatetime))} · ${fmtTime(entry.startDatetime)}–${fmtTime(entry.endDatetime)} Uhr`;
       default:
         return "";
     }

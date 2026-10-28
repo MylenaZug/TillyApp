@@ -21,8 +21,10 @@ import {
   nowLocalISO,
   stoolConsistency,
   toLocalDateValue,
+  toLocalInputValue,
   toLocalTimeValue,
 } from "@/lib/tilly/helpers";
+import { aloneDurationMs, localDateTimeToIso, MIN_ALONE_DURATION_MS, roundToMinute } from "@/lib/tilly/alone";
 import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, Chip, FieldLabel, PrimaryButton, StarRow, TextArea, TextInput } from "./ui";
 
@@ -96,17 +98,13 @@ export function EntryForm({
   const [folgsamkeit, setFolgsamkeit] = useState(existing?.folgsamkeit || 0);
   const [energie, setEnergie] = useState(existing?.energie || 0);
 
-  // Alleine-Zeiten: ein Tag + Start-/Enduhrzeit. Liegt das Ende vor dem Start, ging der
-  // Zeitraum ueber Mitternacht - das Ende zaehlt dann zum Folgetag.
-  const aloneInitialStart = existing?.startedAt || existing?.date || nowLocalISO();
-  const [aloneDay, setAloneDay] = useState(toLocalDateValue(aloneInitialStart));
-  const [aloneStartTime, setAloneStartTime] = useState(toLocalTimeValue(aloneInitialStart));
-  const [aloneEndTime, setAloneEndTime] = useState(toLocalTimeValue(existing?.endedAt || existing?.date || nowLocalISO()));
-  const aloneStartedAt = combineLocalDateTime(aloneDay, aloneStartTime);
-  const aloneEndSameDay = new Date(combineLocalDateTime(aloneDay, aloneEndTime));
-  if (aloneEndSameDay.getTime() < new Date(aloneStartedAt).getTime()) aloneEndSameDay.setDate(aloneEndSameDay.getDate() + 1);
-  const aloneEndedAt = aloneEndSameDay.toISOString();
-  const aloneMs = new Date(aloneEndedAt).getTime() - new Date(aloneStartedAt).getTime();
+  const aloneInitialStart = existing?.startDatetime || existing?.date || nowLocalISO();
+  const aloneInitialEnd = existing?.endDatetime || existing?.date || nowLocalISO();
+  const [aloneStartInput, setAloneStartInput] = useState(toLocalInputValue(aloneInitialStart));
+  const [aloneEndInput, setAloneEndInput] = useState(toLocalInputValue(aloneInitialEnd));
+  const aloneStartedAt = localDateTimeToIso(aloneStartInput);
+  const aloneEndedAt = localDateTimeToIso(aloneEndInput);
+  const aloneMs = aloneDurationMs(aloneStartedAt, aloneEndedAt);
 
   const [note, setNote] = useState(existing?.note || "");
 
@@ -120,7 +118,7 @@ export function EntryForm({
     (categoryId === "stress" && level > 0) ||
     (categoryId === "kosten" && kostenAmount.trim().length > 0 && !Number.isNaN(Number(kostenAmount))) ||
     categoryId === "tagescheck" ||
-    (categoryId === "alone" && Boolean(aloneDay && aloneStartTime && aloneEndTime) && aloneMs > 0);
+    (categoryId === "alone" && aloneMs >= MIN_ALONE_DURATION_MS);
 
   const handleSave = () => {
     const base = { date, note: note.trim() };
@@ -142,8 +140,11 @@ export function EntryForm({
     if (categoryId === "stress") data = { ...base, level };
     if (categoryId === "kosten") data = { ...base, category: kostenCategory, amount: Number(kostenAmount) };
     if (categoryId === "tagescheck") data = { ...base, folgsamkeit, energie };
-    if (categoryId === "alone")
-      data = { ...base, date: aloneEndedAt, startedAt: aloneStartedAt, endedAt: aloneEndedAt, ms: aloneMs };
+    if (categoryId === "alone") {
+      const startDatetime = roundToMinute(aloneStartedAt!);
+      const endDatetime = roundToMinute(aloneEndedAt!);
+      data = { ...base, date: endDatetime, startDatetime, endDatetime };
+    }
     onSave(data);
   };
 
@@ -171,23 +172,19 @@ export function EntryForm({
       <div className="space-y-4">
         {categoryId === "alone" ? (
           <>
-            <div>
-              <FieldLabel>Tag</FieldLabel>
-              <TextInput type="date" value={aloneDay} onChange={(e) => setAloneDay(e.target.value)} />
-            </div>
             <div className="flex gap-2">
               <div className="flex-1">
                 <FieldLabel>Von</FieldLabel>
-                <TextInput type="time" value={aloneStartTime} onChange={(e) => setAloneStartTime(e.target.value)} />
+                <TextInput type="datetime-local" value={aloneStartInput} onChange={(e) => setAloneStartInput(e.target.value)} />
               </div>
               <div className="flex-1">
                 <FieldLabel>Bis</FieldLabel>
-                <TextInput type="time" value={aloneEndTime} onChange={(e) => setAloneEndTime(e.target.value)} />
+                <TextInput type="datetime-local" value={aloneEndInput} onChange={(e) => setAloneEndInput(e.target.value)} />
               </div>
             </div>
             <div className="text-sm text-ink-soft">
               Dauer: <span className="font-semibold text-plum">{aloneMs > 0 ? formatDuration(aloneMs) : "–"}</span>
-              {aloneMs > 0 && toLocalDateValue(aloneEndedAt) !== aloneDay && " (bis zum Folgetag)"}
+              {aloneMs > 0 && aloneMs < MIN_ALONE_DURATION_MS && " (unter 1 Minute)"}
             </div>
           </>
         ) : (
