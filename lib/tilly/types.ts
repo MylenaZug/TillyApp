@@ -32,9 +32,7 @@ export type SymptomData = BaseEntryData & { category: string };
 export type StressData = BaseEntryData & { level: number };
 export type KostenData = BaseEntryData & { category: string; amount: number };
 export type TagescheckData = BaseEntryData & { folgsamkeit: number; energie: number };
-// `date` = endedAt (fuer konsistente Sortierung in Verlauf/Kalender); Start/Ende getrennt
-// gespeichert, damit die Anzeige den Zeitraum zeigen kann.
-export type AloneData = BaseEntryData & { startedAt: string; endedAt: string; ms: number };
+export type AloneData = { startedAt: string; endedAt: string; note?: string };
 
 export type EntryDataByType = {
   food: FoodData;
@@ -56,6 +54,7 @@ export type AnyEntry = {
   type: CategoryId;
   updatedAt: number;
 } & Partial<StoolData & TrainingData & WeightData & FoodData & VetData & SymptomData & StressData & KostenData & TagescheckData & AloneData> & {
+    // Bei Alleine-Eintraegen wird dieses normalisierte Feld aus startedAt abgeleitet.
     date: string;
   };
 

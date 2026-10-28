@@ -31,7 +31,13 @@ const DEFAULT_TRAINING_TYPES = ["Sitz", "Leinenführigkeit", "Rückruf"];
 function parseEntryRecord(record: EntryRecord): AnyEntry {
   try {
     const data = JSON.parse(record.data) as Record<string, unknown>;
-    return { id: record.id, type: record.type as CategoryId, updatedAt: record.updatedAt, ...data } as AnyEntry;
+    const date =
+      record.type === "alone" && typeof data.startedAt === "string"
+        ? data.startedAt
+        : typeof data.date === "string"
+          ? data.date
+          : new Date(record.updatedAt).toISOString();
+    return { id: record.id, type: record.type as CategoryId, updatedAt: record.updatedAt, ...data, date } as AnyEntry;
   } catch {
     return {
       id: record.id,
@@ -294,7 +300,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     const ms = new Date(endedAt).getTime() - new Date(aloneStart).getTime();
     setAloneStart(null);
     await setKv("alone-start", "");
-    await saveEntry(undefined, "alone", { date: endedAt, startedAt: aloneStart, endedAt, ms });
+    await saveEntry(undefined, "alone", { startedAt: aloneStart, endedAt });
     await refresh();
     showToast(`Tilly war ${formatDuration(ms)} allein`);
   }

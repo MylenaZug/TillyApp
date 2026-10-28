@@ -181,7 +181,7 @@ describe("AppShell", () => {
     expect(stop.compareDocumentPosition(heute) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("speichert beim Stoppen Start, Ende und Dauer und beendet den Timer", async () => {
+  it("speichert beim Stoppen nur Start und Ende und beendet den Timer", async () => {
     const startedAt = new Date(Date.now() - 90 * 60_000).toISOString();
     mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? startedAt : null));
     const user = userEvent.setup();
@@ -194,8 +194,9 @@ describe("AppShell", () => {
     expect(id).toBeUndefined();
     expect(type).toBe("alone");
     expect(data.startedAt).toBe(startedAt);
-    expect(data.ms).toBeGreaterThanOrEqual(90 * 60_000);
-    expect(data.endedAt).toBe(data.date);
+    expect(Date.parse(data.endedAt) - Date.parse(data.startedAt)).toBeGreaterThanOrEqual(90 * 60_000);
+    expect(data).not.toHaveProperty("date");
+    expect(data).not.toHaveProperty("ms");
     expect(mockSetKv).toHaveBeenCalledWith("alone-start", "");
     await waitFor(() => expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument());
   });

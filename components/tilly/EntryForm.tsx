@@ -96,16 +96,17 @@ export function EntryForm({
   const [folgsamkeit, setFolgsamkeit] = useState(existing?.folgsamkeit || 0);
   const [energie, setEnergie] = useState(existing?.energie || 0);
 
-  // Alleine-Zeiten: ein Tag + Start-/Enduhrzeit. Liegt das Ende vor dem Start, ging der
-  // Zeitraum ueber Mitternacht - das Ende zaehlt dann zum Folgetag.
-  const aloneInitialStart = existing?.startedAt || existing?.date || nowLocalISO();
-  const [aloneDay, setAloneDay] = useState(toLocalDateValue(aloneInitialStart));
-  const [aloneStartTime, setAloneStartTime] = useState(toLocalTimeValue(aloneInitialStart));
-  const [aloneEndTime, setAloneEndTime] = useState(toLocalTimeValue(existing?.endedAt || existing?.date || nowLocalISO()));
-  const aloneStartedAt = combineLocalDateTime(aloneDay, aloneStartTime);
-  const aloneEndSameDay = new Date(combineLocalDateTime(aloneDay, aloneEndTime));
-  if (aloneEndSameDay.getTime() < new Date(aloneStartedAt).getTime()) aloneEndSameDay.setDate(aloneEndSameDay.getDate() + 1);
-  const aloneEndedAt = aloneEndSameDay.toISOString();
+  // Alleine-Zeiten: Start und Ende sind eigenstaendige Datum+Uhrzeit-Werte; die Dauer wird nur berechnet.
+  const [aloneStartedAt, setAloneStartedAt] = useState(existing?.startedAt || existing?.date || nowLocalISO());
+  const [aloneEndedAt, setAloneEndedAt] = useState(existing?.endedAt || existing?.date || nowLocalISO());
+  // Liegt Von nach Bis (z. B. Eintrag auf einen anderen Tag verschoben), zieht Bis auf den Von-Tag
+  // mit. Die Bis-Uhrzeit bleibt erhalten, sofern das Ende dann nicht vor dem Start laege.
+  const changeAloneStart = (value: string) => {
+    setAloneStartedAt(value);
+    if (new Date(value).getTime() <= new Date(aloneEndedAt).getTime()) return;
+    const moved = combineLocalDateTime(toLocalDateValue(value), toLocalTimeValue(aloneEndedAt));
+    setAloneEndedAt(new Date(moved).getTime() >= new Date(value).getTime() ? moved : value);
+  };
   const aloneMs = new Date(aloneEndedAt).getTime() - new Date(aloneStartedAt).getTime();
 
   const [note, setNote] = useState(existing?.note || "");
@@ -120,7 +121,7 @@ export function EntryForm({
     (categoryId === "stress" && level > 0) ||
     (categoryId === "kosten" && kostenAmount.trim().length > 0 && !Number.isNaN(Number(kostenAmount))) ||
     categoryId === "tagescheck" ||
-    (categoryId === "alone" && Boolean(aloneDay && aloneStartTime && aloneEndTime) && aloneMs > 0);
+    (categoryId === "alone" && aloneMs > 0);
 
   const handleSave = () => {
     const base = { date, note: note.trim() };
@@ -143,7 +144,7 @@ export function EntryForm({
     if (categoryId === "kosten") data = { ...base, category: kostenCategory, amount: Number(kostenAmount) };
     if (categoryId === "tagescheck") data = { ...base, folgsamkeit, energie };
     if (categoryId === "alone")
-      data = { ...base, date: aloneEndedAt, startedAt: aloneStartedAt, endedAt: aloneEndedAt, ms: aloneMs };
+      data = { startedAt: aloneStartedAt, endedAt: aloneEndedAt, note: note.trim() };
     onSave(data);
   };
 
@@ -171,23 +172,33 @@ export function EntryForm({
       <div className="space-y-4">
         {categoryId === "alone" ? (
           <>
-            <div>
-              <FieldLabel>Tag</FieldLabel>
-              <TextInput type="date" value={aloneDay} onChange={(e) => setAloneDay(e.target.value)} />
-            </div>
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <FieldLabel>Von</FieldLabel>
-                <TextInput type="time" value={aloneStartTime} onChange={(e) => setAloneStartTime(e.target.value)} />
+            {(
+              [
+                ["Von", aloneStartedAt, changeAloneStart],
+                ["Bis", aloneEndedAt, setAloneEndedAt],
+              ] as const
+            ).map(([label, value, setValue]) => (
+              <div key={label}>
+                <FieldLabel>{label}</FieldLabel>
+                <div className="flex gap-2">
+                  <TextInput
+                    type="date"
+                    aria-label={`${label} Datum`}
+                    value={toLocalDateValue(value)}
+                    onChange={(e) => setValue(combineLocalDateTime(e.target.value, toLocalTimeValue(value)))}
+                  />
+                  <TextInput
+                    type="time"
+                    aria-label={`${label} Uhrzeit`}
+                    value={toLocalTimeValue(value)}
+                    onChange={(e) => setValue(combineLocalDateTime(toLocalDateValue(value), e.target.value))}
+                  />
+                </div>
               </div>
-              <div className="flex-1">
-                <FieldLabel>Bis</FieldLabel>
-                <TextInput type="time" value={aloneEndTime} onChange={(e) => setAloneEndTime(e.target.value)} />
-              </div>
-            </div>
+            ))}
             <div className="text-sm text-ink-soft">
               Dauer: <span className="font-semibold text-plum">{aloneMs > 0 ? formatDuration(aloneMs) : "–"}</span>
-              {aloneMs > 0 && toLocalDateValue(aloneEndedAt) !== aloneDay && " (bis zum Folgetag)"}
+              {aloneMs <= 0 && " (Ende muss nach dem Start liegen)"}
             </div>
           </>
         ) : (

@@ -103,6 +103,12 @@ export function formatDuration(ms: number): string {
   return `${hours} Std ${minutes} Min`;
 }
 
+export function aloneDurationMs(startedAt?: string, endedAt?: string): number {
+  if (!startedAt || !endedAt) return 0;
+  const duration = new Date(endedAt).getTime() - new Date(startedAt).getTime();
+  return Number.isFinite(duration) ? Math.max(0, duration) : 0;
+}
+
 // Gewicht schwankt ueber den Tag - fuer einen fairen Vergleich wird nach Moeglichkeit
 // der letzte Eintrag mit derselben Tageszeit herangezogen, nicht einfach der letzte
 // ueberhaupt. `previousWeightEntries` erwartet bereits auf type "weight" gefilterte und
@@ -198,8 +204,8 @@ export function entrySummary(entry: AnyEntry): string {
       case "tagescheck":
         return `Folgsamkeit ${starGlyphs(entry.folgsamkeit)} · Sharklevel ${starGlyphs(entry.energie)}`;
       case "alone":
-        if (entry.ms === undefined || !entry.startedAt || !entry.endedAt) return "";
-        return `${formatDuration(entry.ms)} · ${fmtTime(entry.startedAt)}–${fmtTime(entry.endedAt)} Uhr`;
+        if (!entry.startedAt || !entry.endedAt) return "";
+        return `${formatDuration(aloneDurationMs(entry.startedAt, entry.endedAt))} · ${fmtTime(entry.startedAt)}–${fmtTime(entry.endedAt)} Uhr`;
       default:
         return "";
     }

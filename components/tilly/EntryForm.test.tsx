@@ -90,3 +90,44 @@ describe("EntryForm Zeitpunkt (getrennte Datum- und Uhrzeit-Felder)", () => {
     expect(Math.abs(saved - before)).toBeLessThan(2 * 60_000);
   });
 });
+
+describe("EntryForm Alleine", () => {
+  const existingAlone = (start: Date, end: Date) =>
+    ({ id: "1", type: "alone", date: start.toISOString(), startedAt: start.toISOString(), endedAt: end.toISOString() }) as unknown as AnyEntry;
+
+  it("zeigt nur Von und Bis als Datum+Uhrzeit und berechnet die Dauer", () => {
+    setup("alone", existingAlone(new Date(2026, 2, 5, 9, 0), new Date(2026, 2, 5, 10, 30)));
+    expect(document.querySelectorAll('input[type="date"]')).toHaveLength(2);
+    expect(document.querySelectorAll('input[type="time"]')).toHaveLength(2);
+    expect(screen.queryByText("Tag")).toBeNull();
+    expect(screen.getByText("1 Std 30 Min")).toBeInTheDocument();
+  });
+
+  it("speichert nur startedAt, endedAt und note", async () => {
+    const { onSave } = setup("alone", existingAlone(new Date(2026, 2, 5, 9, 0), new Date(2026, 2, 5, 10, 30)));
+    fireEvent.change(screen.getByLabelText("Bis Datum"), { target: { value: "2026-03-06" } });
+    await userEvent.click(screen.getByRole("button", { name: "Änderungen speichern" }));
+
+    const data = onSave.mock.calls[0][0];
+    expect(Object.keys(data).sort()).toEqual(["endedAt", "note", "startedAt"]);
+    const end = new Date(data.endedAt);
+    expect([end.getDate(), end.getHours(), end.getMinutes()]).toEqual([6, 10, 30]);
+  });
+
+  it("zieht Bis mit auf den neuen Tag, wenn Von nach Bis verschoben wird", async () => {
+    const { onSave } = setup("alone", existingAlone(new Date(2026, 2, 5, 9, 0), new Date(2026, 2, 5, 10, 30)));
+    fireEvent.change(screen.getByLabelText("Von Datum"), { target: { value: "2026-03-08" } });
+    expect((screen.getByLabelText("Bis Datum") as HTMLInputElement).value).toBe("2026-03-08");
+    expect((screen.getByLabelText("Bis Uhrzeit") as HTMLInputElement).value).toBe("10:30");
+    await userEvent.click(screen.getByRole("button", { name: "Änderungen speichern" }));
+    const data = onSave.mock.calls[0][0];
+    expect(new Date(data.startedAt).getDate()).toBe(8);
+    expect(new Date(data.endedAt).getDate()).toBe(8);
+  });
+
+  it("setzt Bis auf Von, wenn die Bis-Uhrzeit am neuen Tag vor dem Start laege", () => {
+    setup("alone", existingAlone(new Date(2026, 2, 5, 9, 0), new Date(2026, 2, 5, 10, 30)));
+    fireEvent.change(screen.getByLabelText("Von Uhrzeit"), { target: { value: "11:00" } });
+    expect((screen.getByLabelText("Bis Uhrzeit") as HTMLInputElement).value).toBe("11:00");
+  });
+});
