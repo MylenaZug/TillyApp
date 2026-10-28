@@ -4,9 +4,18 @@ import { auth } from "@/auth";
 import { db } from "@/db/client";
 import { dailyPatience, entries, kvStore } from "@/db/schema";
 import { displayNameFor } from "@/lib/server/uploads";
+import { normalizeAloneData } from "@/lib/tilly/alone";
 
 type KvMutation = { key: string; value: string; updatedAt: number };
-type EntryMutation = { id: string; type: string; data: string; updatedAt: number; deleted?: 0 | 1 };
+type EntryMutation = {
+  id: string;
+  type: string;
+  data: string;
+  startDatetime?: string | null;
+  endDatetime?: string | null;
+  updatedAt: number;
+  deleted?: 0 | 1;
+};
 type PatienceMutation = { date: string; geduld: number; updatedAt: number };
 
 export async function GET(request: NextRequest) {
@@ -60,13 +69,41 @@ export async function POST(request: NextRequest) {
   }
 
   for (const row of entryMutations) {
-    const values = { id: row.id, type: row.type, data: row.data, updatedAt: row.updatedAt, deleted: row.deleted ?? 0 };
+    let data = row.data;
+    let startDatetime = row.startDatetime ?? null;
+    let endDatetime = row.endDatetime ?? null;
+    if (row.type === "alone") {
+      try {
+        const normalized = normalizeAloneData(JSON.parse(row.data), startDatetime, endDatetime);
+        data = JSON.stringify(normalized.data);
+        startDatetime = normalized.startDatetime;
+        endDatetime = normalized.endDatetime;
+      } catch {
+        // Keep malformed legacy payloads intact rather than rejecting unrelated sync batches.
+      }
+    }
+    const values = {
+      id: row.id,
+      type: row.type,
+      data,
+      startDatetime,
+      endDatetime,
+      updatedAt: row.updatedAt,
+      deleted: row.deleted ?? 0,
+    };
     await db
       .insert(entries)
       .values(values)
       .onConflictDoUpdate({
         target: entries.id,
-        set: { type: values.type, data: values.data, updatedAt: values.updatedAt, deleted: values.deleted },
+        set: {
+          type: values.type,
+          data: values.data,
+          startDatetime: values.startDatetime,
+          endDatetime: values.endDatetime,
+          updatedAt: values.updatedAt,
+          deleted: values.deleted,
+        },
         where: sql`${entries.updatedAt} < ${row.updatedAt}`,
       });
   }

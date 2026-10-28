@@ -66,6 +66,19 @@ describe("Eintraege", () => {
     expect(JSON.parse(listed[0].data).note).toBe("Napf, aktualisiert");
   });
 
+  it("speichert Alleine-Zeitpunkte getrennt von den JSON-Daten", async () => {
+    const entry = await saveEntry(undefined, "alone", {
+      date: "2026-03-05T10:30:00.000Z",
+      startDatetime: "2026-03-05T09:00:20.000Z",
+      endDatetime: "2026-03-05T10:30:20.000Z",
+      ms: 5_400_000,
+    });
+
+    expect(entry.startDatetime).toBe("2026-03-05T09:00:00.000Z");
+    expect(entry.endDatetime).toBe("2026-03-05T10:30:00.000Z");
+    expect(JSON.parse(entry.data)).toEqual({});
+  });
+
   it("blendet weich geloeschte Eintraege in listEntries aus", async () => {
     const entry = await saveEntry(undefined, "training", { activity: "Sitz" });
     await deleteEntry(entry.id);

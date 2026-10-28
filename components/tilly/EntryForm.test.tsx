@@ -29,16 +29,82 @@ function setup(categoryId: string, existing: AnyEntry | null = null) {
   );
   const date = () => document.querySelector<HTMLInputElement>('input[type="date"]')!;
   const time = () => document.querySelector<HTMLInputElement>('input[type="time"]');
-  return { onSave, date, time };
+  const dateTimes = () => Array.from(document.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]'));
+  return { onSave, date, time, dateTimes };
 }
 
 const existingFood = (iso: string) => ({ id: "1", type: "food", date: iso, food: "Nassfutter", note: "" }) as unknown as AnyEntry;
+const existingAlone = (startDatetime: string, endDatetime: string) =>
+  ({ id: "1", type: "alone", date: startDatetime, startDatetime, endDatetime, note: "" }) as unknown as AnyEntry;
 
 describe("EntryForm Zeitpunkt (getrennte Datum- und Uhrzeit-Felder)", () => {
   it("bietet bei Kategorien mit Uhrzeit zwei getrennte Felder an", () => {
     const { date, time } = setup("food");
     expect(date()).toBeInTheDocument();
     expect(time()).toBeInTheDocument();
+  });
+
+  describe("EntryForm Alleine-Zeitpunkte", () => {
+    const field = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
+
+    it("verwendet separate volle Start- und Endzeitpunkte auch ueber mehrere Tage", () => {
+      setup("alone", existingAlone(new Date(2026, 2, 5, 9, 0).toISOString(), new Date(2026, 2, 6, 10, 0).toISOString()));
+
+      expect(document.querySelectorAll('input[type="date"]')).toHaveLength(2);
+      expect(document.querySelectorAll('input[type="time"]')).toHaveLength(2);
+      expect(screen.queryByText("Tag")).toBeNull();
+      expect([field("Von Datum").value, field("Von Uhrzeit").value]).toEqual(["2026-03-05", "09:00"]);
+      expect([field("Bis Datum").value, field("Bis Uhrzeit").value]).toEqual(["2026-03-06", "10:00"]);
+      expect(screen.getByText("25 Std 0 Min")).toBeInTheDocument();
+    });
+
+    it("speichert nur Start, Ende und Notiz - ohne date und ms", async () => {
+      const start = new Date(2026, 2, 5, 9, 0).toISOString();
+      const end = new Date(2026, 2, 6, 10, 0).toISOString();
+      const { onSave } = setup("alone", existingAlone(start, end));
+      fireEvent.change(screen.getByPlaceholderText("Weitere Beobachtungen…"), { target: { value: "Notiz" } });
+      await userEvent.click(screen.getByRole("button", { name: "Änderungen speichern" }));
+
+      expect(onSave).toHaveBeenCalledWith({ startDatetime: start, endDatetime: end, note: "Notiz" });
+    });
+
+    it("zieht Bis mit auf den neuen Tag, wenn Von nach Bis verschoben wird", async () => {
+      const { onSave } = setup(
+        "alone",
+        existingAlone(new Date(2026, 2, 5, 9, 0).toISOString(), new Date(2026, 2, 5, 10, 30).toISOString()),
+      );
+      fireEvent.change(field("Von Datum"), { target: { value: "2026-03-08" } });
+      expect([field("Bis Datum").value, field("Bis Uhrzeit").value]).toEqual(["2026-03-08", "10:30"]);
+      await userEvent.click(screen.getByRole("button", { name: "Änderungen speichern" }));
+
+      const data = onSave.mock.calls[0][0];
+      expect(new Date(data.startDatetime).getDate()).toBe(8);
+      expect(new Date(data.endDatetime).getDate()).toBe(8);
+    });
+
+    it("setzt Bis auf Von, wenn die Bis-Uhrzeit am neuen Tag vor dem Start laege", () => {
+      setup("alone", existingAlone(new Date(2026, 2, 5, 9, 0).toISOString(), new Date(2026, 2, 5, 10, 30).toISOString()));
+      fireEvent.change(field("Von Uhrzeit"), { target: { value: "11:00" } });
+      expect(field("Bis Uhrzeit").value).toBe("11:00");
+      expect(screen.getByRole("button", { name: "Änderungen speichern" })).toBeDisabled();
+    });
+
+    it("stuerzt bei einem geleerten Datum nicht ab und deaktiviert Speichern", () => {
+      setup("alone", existingAlone(new Date(2026, 2, 5, 9, 0).toISOString(), new Date(2026, 2, 5, 10, 0).toISOString()));
+      fireEvent.change(field("Von Datum"), { target: { value: "" } });
+
+      expect(screen.getByRole("button", { name: "Änderungen speichern" })).toBeDisabled();
+    });
+
+    it("laesst Sessions unter einer Minute nicht speichern", () => {
+      setup("alone");
+      fireEvent.change(field("Von Datum"), { target: { value: "2026-03-05" } });
+      fireEvent.change(field("Von Uhrzeit"), { target: { value: "09:00" } });
+      fireEvent.change(field("Bis Datum"), { target: { value: "2026-03-05" } });
+      fireEvent.change(field("Bis Uhrzeit"), { target: { value: "09:00" } });
+
+      expect(screen.getByRole("button", { name: "Eintrag speichern" })).toBeDisabled();
+    });
   });
 
   it("bietet bei Kategorien ohne Uhrzeit nur das Datum an", () => {
@@ -88,46 +154,5 @@ describe("EntryForm Zeitpunkt (getrennte Datum- und Uhrzeit-Felder)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Eintrag speichern" }));
     const saved = new Date(onSave.mock.calls[0][0].date).getTime();
     expect(Math.abs(saved - before)).toBeLessThan(2 * 60_000);
-  });
-});
-
-describe("EntryForm Alleine", () => {
-  const existingAlone = (start: Date, end: Date) =>
-    ({ id: "1", type: "alone", date: start.toISOString(), startedAt: start.toISOString(), endedAt: end.toISOString() }) as unknown as AnyEntry;
-
-  it("zeigt nur Von und Bis als Datum+Uhrzeit und berechnet die Dauer", () => {
-    setup("alone", existingAlone(new Date(2026, 2, 5, 9, 0), new Date(2026, 2, 5, 10, 30)));
-    expect(document.querySelectorAll('input[type="date"]')).toHaveLength(2);
-    expect(document.querySelectorAll('input[type="time"]')).toHaveLength(2);
-    expect(screen.queryByText("Tag")).toBeNull();
-    expect(screen.getByText("1 Std 30 Min")).toBeInTheDocument();
-  });
-
-  it("speichert nur startedAt, endedAt und note", async () => {
-    const { onSave } = setup("alone", existingAlone(new Date(2026, 2, 5, 9, 0), new Date(2026, 2, 5, 10, 30)));
-    fireEvent.change(screen.getByLabelText("Bis Datum"), { target: { value: "2026-03-06" } });
-    await userEvent.click(screen.getByRole("button", { name: "Änderungen speichern" }));
-
-    const data = onSave.mock.calls[0][0];
-    expect(Object.keys(data).sort()).toEqual(["endedAt", "note", "startedAt"]);
-    const end = new Date(data.endedAt);
-    expect([end.getDate(), end.getHours(), end.getMinutes()]).toEqual([6, 10, 30]);
-  });
-
-  it("zieht Bis mit auf den neuen Tag, wenn Von nach Bis verschoben wird", async () => {
-    const { onSave } = setup("alone", existingAlone(new Date(2026, 2, 5, 9, 0), new Date(2026, 2, 5, 10, 30)));
-    fireEvent.change(screen.getByLabelText("Von Datum"), { target: { value: "2026-03-08" } });
-    expect((screen.getByLabelText("Bis Datum") as HTMLInputElement).value).toBe("2026-03-08");
-    expect((screen.getByLabelText("Bis Uhrzeit") as HTMLInputElement).value).toBe("10:30");
-    await userEvent.click(screen.getByRole("button", { name: "Änderungen speichern" }));
-    const data = onSave.mock.calls[0][0];
-    expect(new Date(data.startedAt).getDate()).toBe(8);
-    expect(new Date(data.endedAt).getDate()).toBe(8);
-  });
-
-  it("setzt Bis auf Von, wenn die Bis-Uhrzeit am neuen Tag vor dem Start laege", () => {
-    setup("alone", existingAlone(new Date(2026, 2, 5, 9, 0), new Date(2026, 2, 5, 10, 30)));
-    fireEvent.change(screen.getByLabelText("Von Uhrzeit"), { target: { value: "11:00" } });
-    expect((screen.getByLabelText("Bis Uhrzeit") as HTMLInputElement).value).toBe("11:00");
   });
 });

@@ -193,12 +193,24 @@ describe("AppShell", () => {
     const [id, type, data] = mockSaveEntry.mock.calls[0];
     expect(id).toBeUndefined();
     expect(type).toBe("alone");
-    expect(data.startedAt).toBe(startedAt);
-    expect(Date.parse(data.endedAt) - Date.parse(data.startedAt)).toBeGreaterThanOrEqual(90 * 60_000);
+    expect(data.startDatetime).toBe(new Date(Math.round(new Date(startedAt).getTime() / 60_000) * 60_000).toISOString());
     expect(data).not.toHaveProperty("date");
     expect(data).not.toHaveProperty("ms");
+    expect(new Date(data.endDatetime).getTime() - new Date(data.startDatetime).getTime()).toBe(90 * 60_000);
     expect(mockSetKv).toHaveBeenCalledWith("alone-start", "");
     await waitFor(() => expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument());
+  });
+
+  it("loescht einen Timer unter einer Minute ohne einen Eintrag zu speichern", async () => {
+    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? new Date(Date.now() - 30_000).toISOString() : null));
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+
+    await user.click(await screen.findByRole("button", { name: "Stop" }));
+
+    expect(mockSaveEntry).not.toHaveBeenCalled();
+    expect(await screen.findByText("Unter 1 Minute nicht gespeichert")).toBeInTheDocument();
+    expect(mockSetKv).toHaveBeenCalledWith("alone-start", "");
   });
 
   it("zeigt die Geduld der anderen eingeklappt und klappt sie auf Wunsch mit Namen auf", async () => {

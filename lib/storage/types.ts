@@ -4,6 +4,8 @@ export type EntryRecord = {
   id: string;
   type: string;
   data: string;
+  startDatetime?: string | null;
+  endDatetime?: string | null;
   updatedAt: number;
   deleted: 0 | 1;
 };

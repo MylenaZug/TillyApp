@@ -20,6 +20,8 @@ export const entries = sqliteTable("entries", {
   id: text("id").primaryKey(),
   type: text("type").notNull(),
   data: text("data").notNull(),
+  startDatetime: text("start_datetime"),
+  endDatetime: text("end_datetime"),
   updatedAt: integer("updated_at").notNull(),
   deleted: integer("deleted").notNull().default(0),
 });
