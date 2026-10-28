@@ -28,10 +28,10 @@ describe("migrateAloneEntries", () => {
         "alone-1",
         "alone",
         JSON.stringify({
-          date: "2026-03-05T10:30:20.000Z",
+          date: "2026-03-06T10:00:20.000Z",
           startedAt: "2026-03-05T09:00:20.000Z",
-          endedAt: "2026-03-05T10:30:20.000Z",
-          ms: 5_400_000,
+          endedAt: "2026-03-06T10:00:20.000Z",
+          ms: 90_000_000,
           note: "Notiz bleibt",
         }),
         1,
@@ -44,7 +44,7 @@ describe("migrateAloneEntries", () => {
       .prepare("SELECT data, start_datetime, end_datetime FROM entries WHERE id = 'alone-1'")
       .get() as { data: string; start_datetime: string; end_datetime: string };
     expect(row.start_datetime).toBe("2026-03-05T09:00:00.000Z");
-    expect(row.end_datetime).toBe("2026-03-05T10:30:00.000Z");
+    expect(row.end_datetime).toBe("2026-03-06T10:00:00.000Z");
     expect(JSON.parse(row.data)).toEqual({ date: row.end_datetime, note: "Notiz bleibt" });
   });
 
