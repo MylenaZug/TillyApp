@@ -9,6 +9,7 @@ export async function getRejectedEntries(): Promise<Record<string, string>> {
   return Object.fromEntries((await localDb.listRejected()).map((e) => [e.id, e.rejection!]));
 }
 
+export type { SyncResult } from "./sync";
 export { flushScheduledSync, getDataVersion, getLastSyncAt, isClientOutdated, onStorageChange, runSync, setupAutoSync } from "./sync";
 
 function now() {

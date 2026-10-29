@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { SyncResult } from "@/lib/storage";
 import { getDataVersion, getLastSyncAt, getPendingCount, getRejectedEntries, isClientOutdated, onStorageChange, runSync, setupAutoSync } from "@/lib/storage";
 
 export type SyncStatus = "offline" | "pending" | "synced";
@@ -16,7 +17,7 @@ export type SyncInfo = {
   rejected: Record<string, string>;
   // Der Server lehnt diese App-Version ab (426): Neu laden erforderlich.
   outdated: boolean;
-  syncNow: () => Promise<void>;
+  syncNow: () => Promise<SyncResult | undefined | void>;
 };
 
 export function useSyncStatus(): SyncInfo {
@@ -61,7 +62,7 @@ export function useSyncStatus(): SyncInfo {
   const syncNow = useCallback(async () => {
     setSyncing(true);
     try {
-      await runSync();
+      return await runSync();
     } finally {
       setSyncing(false);
     }

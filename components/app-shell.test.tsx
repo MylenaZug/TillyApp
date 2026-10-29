@@ -138,6 +138,28 @@ describe("AppShell", () => {
     expect(await screen.findByTitle("a@example.com · Sync – Offline")).toBeInTheDocument();
   });
 
+  it("meldet nach einem Klick auf Sync, was gesendet und empfangen wurde", async () => {
+    const syncNow = vi.fn().mockResolvedValue({ status: "ok", pushed: 2, pulled: 3 });
+    mockUseSyncStatus.mockReturnValue(syncInfo({ syncNow }));
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+
+    await user.click(await screen.findByRole("button", { name: /^Sync/ }));
+    expect(await screen.findByText("Sync abgeschlossen · 2 gesendet, 3 empfangen")).toBeInTheDocument();
+  });
+
+  it("meldet bei Klick auf Sync einen Fehlschlag und den Zustand 'alles aktuell'", async () => {
+    const syncNow = vi.fn().mockResolvedValueOnce({ status: "failed" }).mockResolvedValueOnce({ status: "ok", pushed: 0, pulled: 0 });
+    mockUseSyncStatus.mockReturnValue(syncInfo({ syncNow }));
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+
+    await user.click(await screen.findByRole("button", { name: /^Sync/ }));
+    expect(await screen.findByText("Sync fehlgeschlagen · wird erneut versucht")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Sync/ }));
+    expect(await screen.findByText("Sync abgeschlossen · alles aktuell")).toBeInTheDocument();
+  });
+
   it("zeigt die Anzahl ausstehender Aenderungen an", async () => {
     mockUseSyncStatus.mockReturnValue(syncInfo({ status: "pending", pending: 2 }));
 

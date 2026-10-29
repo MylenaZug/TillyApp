@@ -43,9 +43,14 @@ function markOutdated() {
   notify();
 }
 
-async function pushQueue() {
+export type SyncResult =
+  | { status: "ok"; pushed: number; pulled: number }
+  | { status: "offline" | "busy" | "outdated" | "failed" };
+
+// Gibt die Anzahl der vom Server angenommenen Aenderungen zurueck.
+async function pushQueue(): Promise<number> {
   const queue = await localDb.getQueue();
-  if (!queue.kv.length && !queue.entries.length && !queue.dailyPatience.length) return;
+  if (!queue.kv.length && !queue.entries.length && !queue.dailyPatience.length) return 0;
 
   const res = await fetch("/api/sync", {
     method: "POST",
@@ -77,10 +82,13 @@ async function pushQueue() {
   );
 
   // Erst nach erfolgreichem Push leeren, sonst gehen Aenderungen bei einem Fehler verloren.
-  await localDb.ackQueue({ ...queue, entries: queue.entries.filter((e) => !rejectedEntries.has(e.id)) });
+  const accepted = queue.entries.filter((e) => !rejectedEntries.has(e.id));
+  await localDb.ackQueue({ ...queue, entries: accepted });
+  return queue.kv.length + accepted.length + queue.dailyPatience.length;
 }
 
-async function pullChanges(allowResync = true): Promise<void> {
+// Gibt die Anzahl der empfangenen Zeilen zurueck.
+async function pullChanges(allowResync = true): Promise<number> {
   const { token } = await localDb.getMeta();
   const res = await fetch(token === null ? "/api/sync" : `/api/sync?token=${token}`, {
     credentials: "include",
@@ -96,23 +104,28 @@ async function pullChanges(allowResync = true): Promise<void> {
     return pullChanges(false);
   }
   if (!res.ok) throw new Error(`sync pull failed: ${res.status}`);
-  if (await localDb.applyPull((await res.json()) as SyncPullResponse)) dataVersion++;
+  const body = (await res.json()) as SyncPullResponse;
+  if (await localDb.applyPull(body)) dataVersion++;
+  return body.kv.length + body.entries.length + body.dailyPatience.length;
 }
 
 let syncing = false;
 
-export async function runSync() {
-  if (typeof navigator !== "undefined" && !navigator.onLine) return;
-  if (syncing || clientOutdated) return;
+export async function runSync(): Promise<SyncResult> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return { status: "offline" };
+  if (clientOutdated) return { status: "outdated" };
+  if (syncing) return { status: "busy" };
   syncing = true;
   try {
-    await pushQueue();
-    await pullChanges();
+    const pushed = await pushQueue();
+    const pulled = await pullChanges();
     lastSyncAt = Date.now();
     notify();
+    return { status: "ok", pushed, pulled };
   } catch (err) {
     // Bleibt in der Queue - naechster Trigger (online-Event/Intervall/Fokus) versucht es erneut.
     console.warn("Tilly sync failed, retrying later", err);
+    return { status: clientOutdated ? "outdated" : "failed" };
   } finally {
     syncing = false;
   }

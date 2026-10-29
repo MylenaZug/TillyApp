@@ -51,7 +51,8 @@ describe("runSync", () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(ok({ rejected: [] })).mockResolvedValueOnce(ok(pull({ token: 7 })));
     vi.stubGlobal("fetch", fetchMock);
 
-    await runSync();
+    const result = await runSync();
+    expect(result).toEqual({ status: "ok", pushed: 3, pulled: 0 });
 
     const [pushUrl, pushInit] = fetchMock.mock.calls[0];
     expect(pushUrl).toBe("/api/sync");
@@ -108,6 +109,16 @@ describe("runSync", () => {
     expect(getDataVersion()).toBe(v0 + 1);
   });
 
+  it("meldet Fehlschlag und Offline-Zustand im Ergebnis", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(fail(500)));
+    await localDb.enqueueEntry(entry("e1"));
+    expect(await runSync()).toEqual({ status: "failed" });
+
+    vi.stubGlobal("navigator", { onLine: false });
+    expect(await runSync()).toEqual({ status: "offline" });
+  });
+
   it("holt beim ersten Sync das Fenster und danach nur Aenderungen seit dem Token", async () => {
     const fetchMock = vi
       .fn()
@@ -160,7 +171,7 @@ describe("runSync", () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(fail(500));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(runSync()).resolves.toBeUndefined();
+    await expect(runSync()).resolves.toEqual({ status: "failed" });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect((await localDb.getQueue()).kv).toHaveLength(1);

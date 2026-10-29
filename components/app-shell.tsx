@@ -195,6 +195,33 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   }, [rejectedCount]);
 
   // Meldungen: "<Gegenstand> <Vorgang>", Zusatzinfo nach " · ", kein Emoji.
+  // Rueckmeldung zum Klick auf den Sync-Button.
+  async function handleManualSync() {
+    const result = await sync.syncNow();
+    if (!result) return;
+    switch (result.status) {
+      case "ok": {
+        const parts = [
+          result.pushed > 0 ? `${result.pushed} gesendet` : "",
+          result.pulled > 0 ? `${result.pulled} empfangen` : "",
+        ].filter(Boolean);
+        showToast(`Sync abgeschlossen · ${parts.length ? parts.join(", ") : "alles aktuell"}`);
+        break;
+      }
+      case "offline":
+        showToast("Sync nicht möglich · offline", "warn");
+        break;
+      case "outdated":
+        showToast("Sync nicht möglich · App veraltet, bitte neu laden", "warn");
+        break;
+      case "busy":
+        showToast("Sync läuft bereits");
+        break;
+      default:
+        showToast("Sync fehlgeschlagen · wird erneut versucht", "warn");
+    }
+  }
+
   function showToast(message: string, tone: ToastTone = "ok") {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ message, tone });
@@ -419,7 +446,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           </div>
         </div>
         <div className="relative">
-          <SyncButton {...sync} userEmail={userEmail} />
+          <SyncButton {...sync} syncNow={handleManualSync} userEmail={userEmail} />
           {toast && (
             <div
               role="status"
