@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { AnyEntry } from "@/lib/tilly/types";
 import {
   combineLocalDateTime,
+  dateKey,
   dateOnlyToISO,
   entrySummary,
   formatDuration,
+  startOfDay,
   toLocalDateValue,
   toLocalTimeValue,
 } from "@/lib/tilly/helpers";
@@ -28,22 +30,38 @@ describe("entrySummary fuer Alleine-Eintraege", () => {
   const start = new Date(2026, 0, 1, 9, 0).toISOString();
   const end = new Date(2026, 0, 1, 10, 30).toISOString();
 
-  it("zeigt Dauer und Uhrzeiten von-bis", () => {
-    expect(entrySummary(alone({ startedAt: start, endedAt: end, ms: 90 * 60_000 }))).toBe("1 Std 30 Min · 09:00–10:30 Uhr");
+  it("zeigt Dauer und Uhrzeiten von-bis aus den separaten Zeitpunkten", () => {
+    expect(entrySummary(alone({ startDatetime: start, endDatetime: end }))).toBe("1 Std 30 Min · 09:00–10:30 Uhr");
   });
 
   it("akzeptiert eine Dauer von 0 als gueltigen Wert", () => {
-    expect(entrySummary(alone({ startedAt: start, endedAt: start, ms: 0 }))).toContain("0 Min");
+    expect(entrySummary(alone({ startDatetime: start, endDatetime: start }))).toContain("0 Min");
   });
 
-  it("faellt bei fehlenden Feldern auf den Fallback-Text zurueck", () => {
-    expect(entrySummary(alone({ endedAt: end, ms: 1000 }))).toBe("Eintrag gespeichert");
-    expect(entrySummary(alone({ startedAt: start, ms: 1000 }))).toBe("Eintrag gespeichert");
-    expect(entrySummary(alone({ startedAt: start, endedAt: end }))).toBe("Eintrag gespeichert");
+  it("zeigt bei fehlenden Feldern keinen Platzhalter-Text", () => {
+    expect(entrySummary(alone({ endDatetime: end }))).toBe("");
+    expect(entrySummary(alone({ startDatetime: start }))).toBe("");
   });
 });
 
 describe("Datum/Uhrzeit-Helfer", () => {
+  it("vergleicht lokale Kalendertage auch nach einer DST-Umstellung korrekt", () => {
+    const previousTimezone = process.env.TZ;
+    process.env.TZ = "Europe/Berlin";
+    try {
+      const yesterday = "2026-03-28T23:30:00.000Z";
+      const today = "2026-03-29T22:30:00.000Z";
+      expect(
+        Math.floor((startOfDay(new Date(today)).getTime() - startOfDay(new Date(yesterday)).getTime()) / 86_400_000),
+      ).toBe(0);
+      expect(dateKey(yesterday)).toBe("2026-03-29");
+      expect(dateKey(today)).toBe("2026-03-30");
+    } finally {
+      if (previousTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTimezone;
+    }
+  });
+
   it("zerlegt und fuehrt lokale Zeit verlustfrei wieder zusammen", () => {
     const iso = combineLocalDateTime("2026-03-05", "07:45");
     expect(toLocalDateValue(iso)).toBe("2026-03-05");

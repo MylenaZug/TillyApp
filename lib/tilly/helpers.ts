@@ -1,4 +1,5 @@
-import { STRESS_LEVELS, TILLY_BIRTHDATE } from "./constants";
+import { LEGACY_STOOL_CONSISTENCY, STRESS_LEVELS, TILLY_BIRTHDATE } from "./constants";
+import { aloneDurationMs } from "./alone";
 import type { AnyEntry } from "./types";
 
 export const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -82,6 +83,14 @@ export function stressLabelFor(level: number) {
   return STRESS_LEVELS[clamped - 1]?.label || "";
 }
 
+// consistency war frueher ein einzelner String, heute ein Array - und alte Bezeichnungen
+// werden auf die aktuellen gemappt (siehe LEGACY_STOOL_CONSISTENCY).
+export function stoolConsistency(entry: AnyEntry): string[] {
+  const raw = entry.consistency as unknown as string | string[] | undefined;
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return [...new Set(list.map((c) => LEGACY_STOOL_CONSISTENCY[c] ?? c))];
+}
+
 export function starGlyphs(n?: number) {
   const count = n || 0;
   return "★".repeat(count) + "☆".repeat(5 - count);
@@ -157,45 +166,45 @@ export function dateKey(d: Date | string) {
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
 }
 
-// Fallback "Eintrag gespeichert" greift, wenn ein Eintrag korrupt ist (z.B. kaputtes
+// Leerer String, wenn ein Eintrag korrupt ist (z.B. kaputtes
 // JSON aus einer alten Sync-Version) und die typspezifischen Felder fehlen.
 export function entrySummary(entry: AnyEntry): string {
   try {
     switch (entry.type) {
       case "stool": {
-        const consistency = Array.isArray(entry.consistency) ? entry.consistency : entry.consistency ? [entry.consistency] : [];
-        if (consistency.length === 0) return "Eintrag gespeichert";
+        const consistency = stoolConsistency(entry);
+        if (consistency.length === 0) return "";
         return `${consistency.join(", ")}${entry.stoolAmount ? " · " + entry.stoolAmount : ""}${entry.color ? " · " + entry.color : ""}`;
       }
       case "training":
-        if (!entry.activity) return "Eintrag gespeichert";
+        if (!entry.activity) return "";
         return entry.activity;
       case "weight":
-        if (entry.kg === undefined || entry.kg === null || Number.isNaN(Number(entry.kg))) return "Eintrag gespeichert";
+        if (entry.kg === undefined || entry.kg === null || Number.isNaN(Number(entry.kg))) return "";
         return `${entry.kg} kg${entry.daytime ? " · " + entry.daytime : ""}`;
       case "food":
-        if (!entry.food) return "Eintrag gespeichert";
+        if (!entry.food) return "";
         return `${entry.food}${entry.amount ? " · " + entry.amount + " " + (entry.amountUnit || "Gramm") : ""}`;
       case "vet":
         return `${entry.reason || "Termin"}`;
       case "symptom":
-        if (!entry.category) return "Eintrag gespeichert";
+        if (!entry.category) return "";
         return entry.category;
       case "stress":
-        if (!entry.level) return "Eintrag gespeichert";
+        if (!entry.level) return "";
         return `${stressLabelFor(entry.level)} (${entry.level}/3)`;
       case "kosten":
-        if (entry.amount === undefined || Number.isNaN(Number(entry.amount))) return "Eintrag gespeichert";
+        if (entry.amount === undefined || Number.isNaN(Number(entry.amount))) return "";
         return `${entry.category} · ${Number(entry.amount).toFixed(2)} €`;
       case "tagescheck":
         return `Folgsamkeit ${starGlyphs(entry.folgsamkeit)} · Sharklevel ${starGlyphs(entry.energie)}`;
       case "alone":
-        if (entry.ms === undefined || !entry.startedAt || !entry.endedAt) return "Eintrag gespeichert";
-        return `${formatDuration(entry.ms)} · ${fmtTime(entry.startedAt)}–${fmtTime(entry.endedAt)} Uhr`;
+        if (!entry.startDatetime || !entry.endDatetime) return "";
+        return `${formatDuration(aloneDurationMs(entry.startDatetime, entry.endDatetime))} · ${fmtTime(entry.startDatetime)}–${fmtTime(entry.endDatetime)} Uhr`;
       default:
-        return "Eintrag gespeichert";
+        return "";
     }
   } catch {
-    return "Eintrag gespeichert";
+    return "";
   }
 }

@@ -56,7 +56,15 @@ export const STRESS_LEVELS = [
 ];
 
 export const FOOD_AMOUNT_UNITS = ["Gramm", "Dosen"];
-export const STOOL_CONSISTENCY = ["Fest", "Weich", "Breiig", "Wässrig"];
+export const STOOL_CONSISTENCY = ["Harte Knödel", "Feste Wurst", "Weiche Wurst", "Breiflatsch", "Flüssig"];
+// Aeltere Eintraege wurden noch mit den frueheren Bezeichnungen gespeichert - beim Lesen
+// auf die aktuellen abbilden, damit Auswertung und Bearbeiten sie weiter erkennen.
+export const LEGACY_STOOL_CONSISTENCY: Record<string, string> = {
+  Fest: "Feste Wurst",
+  Weich: "Weiche Wurst",
+  Breiig: "Breiflatsch",
+  Wässrig: "Flüssig",
+};
 export const STOOL_AMOUNTS = ["Viel", "Mittel", "Wenig"];
 export const DAYTIME_OPTIONS = ["Morgens", "Mittags", "Abends"];
 export const STOOL_COLORS = [

@@ -139,7 +139,7 @@ describe("GalleryView", () => {
     await user.click(screen.getByRole("button", { name: /Speichern/ }));
 
     await waitFor(() => expect(mockUpdateNote).toHaveBeenCalledWith("mein", "neu"));
-    expect(await screen.findByText("neu")).toBeInTheDocument();
+    expect(await screen.findAllByText("neu")).toHaveLength(2);
   });
 
   it("loescht ein eigenes Foto sofort aus der Liste", async () => {

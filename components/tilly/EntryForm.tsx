@@ -14,7 +14,17 @@ import {
   SYMPTOM_CATEGORIES,
   catMeta,
 } from "@/lib/tilly/constants";
-import { combineLocalDateTime, dateOnlyToISO, nowLocalISO, toLocalDateValue, toLocalTimeValue } from "@/lib/tilly/helpers";
+import {
+  combineLocalDateTime,
+  dateOnlyToISO,
+  formatDuration,
+  nowLocalISO,
+  stoolConsistency,
+  toLocalDateValue,
+  toLocalInputValue,
+  toLocalTimeValue,
+} from "@/lib/tilly/helpers";
+import { aloneDurationMs, localDateTimeToIso, MIN_ALONE_DURATION_MS, roundToMinute } from "@/lib/tilly/alone";
 import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, Chip, FieldLabel, PrimaryButton, StarRow, TextArea, TextInput } from "./ui";
 
@@ -54,10 +64,7 @@ export function EntryForm({
   const meta = catMeta(categoryId);
   const [date, setDate] = useState(existing ? existing.date : nowLocalISO());
 
-  const existingConsistency = existing?.consistency as unknown as string | string[] | undefined;
-  const [consistency, setConsistency] = useState<string[]>(
-    existingConsistency ? (Array.isArray(existingConsistency) ? existingConsistency : [existingConsistency]) : [STOOL_CONSISTENCY[0]],
-  );
+  const [consistency, setConsistency] = useState<string[]>(existing ? stoolConsistency(existing) : []);
   const [stoolAmount, setStoolAmount] = useState(existing?.stoolAmount || STOOL_AMOUNTS[1]);
   const [color, setColor] = useState(existing?.color || STOOL_COLORS[0].label);
   const [flags, setFlags] = useState<string[]>(existing?.flags || []);
@@ -91,6 +98,27 @@ export function EntryForm({
   const [folgsamkeit, setFolgsamkeit] = useState(existing?.folgsamkeit || 0);
   const [energie, setEnergie] = useState(existing?.energie || 0);
 
+  const aloneInitialStart = existing?.startDatetime || existing?.date || nowLocalISO();
+  const aloneInitialEnd = existing?.endDatetime || existing?.date || nowLocalISO();
+  const [aloneStartInput, setAloneStartInput] = useState(toLocalInputValue(aloneInitialStart));
+  const [aloneEndInput, setAloneEndInput] = useState(toLocalInputValue(aloneInitialEnd));
+  // Start und Ende sind "YYYY-MM-DDTHH:mm"-Werte; Datum und Uhrzeit werden getrennt bearbeitet
+  // (datetime-local ist auf Android schlecht bedienbar).
+  const joinDateTime = (day: string, time: string) => (day ? `${day}T${time || "00:00"}` : "");
+  // Liegt Von nach Bis (z. B. Eintrag auf einen anderen Tag verschoben), zieht Bis auf den
+  // Von-Tag mit; die Bis-Uhrzeit bleibt, sofern das Ende dann nicht vor dem Start laege.
+  const changeAloneStart = (value: string) => {
+    setAloneStartInput(value);
+    const start = localDateTimeToIso(value);
+    const end = localDateTimeToIso(aloneEndInput);
+    if (!start || !end || new Date(value).getTime() <= new Date(aloneEndInput).getTime()) return;
+    const moved = joinDateTime(value.slice(0, 10), aloneEndInput.slice(11, 16));
+    setAloneEndInput(new Date(moved).getTime() >= new Date(value).getTime() ? moved : value);
+  };
+  const aloneStartedAt = localDateTimeToIso(aloneStartInput);
+  const aloneEndedAt = localDateTimeToIso(aloneEndInput);
+  const aloneMs = aloneDurationMs(aloneStartedAt, aloneEndedAt);
+
   const [note, setNote] = useState(existing?.note || "");
 
   const canSave =
@@ -102,7 +130,8 @@ export function EntryForm({
     (categoryId === "symptom" && (symptomCategory === "Anderes" ? customSymptom.trim().length > 0 : symptomCategory.length > 0)) ||
     (categoryId === "stress" && level > 0) ||
     (categoryId === "kosten" && kostenAmount.trim().length > 0 && !Number.isNaN(Number(kostenAmount))) ||
-    categoryId === "tagescheck";
+    categoryId === "tagescheck" ||
+    (categoryId === "alone" && aloneMs >= MIN_ALONE_DURATION_MS);
 
   const handleSave = () => {
     const base = { date, note: note.trim() };
@@ -124,6 +153,11 @@ export function EntryForm({
     if (categoryId === "stress") data = { ...base, level };
     if (categoryId === "kosten") data = { ...base, category: kostenCategory, amount: Number(kostenAmount) };
     if (categoryId === "tagescheck") data = { ...base, folgsamkeit, energie };
+    if (categoryId === "alone") {
+      const startDatetime = roundToMinute(aloneStartedAt!);
+      const endDatetime = roundToMinute(aloneEndedAt!);
+      data = { startDatetime, endDatetime, note: note.trim() };
+    }
     onSave(data);
   };
 
@@ -149,6 +183,38 @@ export function EntryForm({
       </div>
 
       <div className="space-y-4">
+        {categoryId === "alone" ? (
+          <>
+            {(
+              [
+                ["Von", aloneStartInput, changeAloneStart],
+                ["Bis", aloneEndInput, setAloneEndInput],
+              ] as const
+            ).map(([label, value, setValue]) => (
+              <div key={label}>
+                <FieldLabel>{label}</FieldLabel>
+                <div className="flex gap-2">
+                  <TextInput
+                    type="date"
+                    aria-label={`${label} Datum`}
+                    value={value.slice(0, 10)}
+                    onChange={(e) => setValue(joinDateTime(e.target.value, value.slice(11, 16)))}
+                  />
+                  <TextInput
+                    type="time"
+                    aria-label={`${label} Uhrzeit`}
+                    value={value.slice(11, 16)}
+                    onChange={(e) => setValue(joinDateTime(value.slice(0, 10), e.target.value))}
+                  />
+                </div>
+              </div>
+            ))}
+            <div className="text-sm text-ink-soft">
+              Dauer: <span className="font-semibold text-plum">{aloneMs > 0 ? formatDuration(aloneMs) : "–"}</span>
+              {aloneMs > 0 && aloneMs < MIN_ALONE_DURATION_MS && " (unter 1 Minute)"}
+            </div>
+          </>
+        ) : (
         <div>
           <FieldLabel>{CATEGORIES_WITH_TIME.includes(categoryId) ? "Zeitpunkt" : "Tag"}</FieldLabel>
           {CATEGORIES_WITH_TIME.includes(categoryId) ? (
@@ -170,6 +236,7 @@ export function EntryForm({
             <TextInput type="date" value={toLocalDateValue(date)} onChange={(e) => setDate(dateOnlyToISO(e.target.value))} />
           )}
         </div>
+        )}
 
         {categoryId === "stool" && (
           <>

@@ -16,7 +16,8 @@ import { useSyncStatus } from "@/lib/storage/useSyncStatus";
 import { SyncButton } from "@/components/tilly/SyncButton";
 import type { EntryRecord, PatienceRecord } from "@/lib/storage/types";
 import { ADDABLE_CATEGORIES, SYMPTOM_CATEGORIES, catMeta } from "@/lib/tilly/constants";
-import { daysAgo, dateKey, formatDuration, nowLocalISO, tillyAge, weightFeedback } from "@/lib/tilly/helpers";
+import { dateKey, formatDuration, nowLocalISO, tillyAge, weightFeedback } from "@/lib/tilly/helpers";
+import { aloneDurationMs, MIN_ALONE_DURATION_MS, normalizeAloneData, roundToMinute } from "@/lib/tilly/alone";
 import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, PawTrailLoader, PrimaryButton } from "@/components/tilly/ui";
 import { HomeView } from "@/components/tilly/HomeView";
@@ -31,6 +32,18 @@ const DEFAULT_TRAINING_TYPES = ["Sitz", "Leinenführigkeit", "Rückruf"];
 function parseEntryRecord(record: EntryRecord): AnyEntry {
   try {
     const data = JSON.parse(record.data) as Record<string, unknown>;
+    if (record.type === "alone") {
+      const normalized = normalizeAloneData(data, record.startDatetime, record.endDatetime);
+      return {
+        id: record.id,
+        type: record.type as CategoryId,
+        updatedAt: record.updatedAt,
+        ...normalized.data,
+        date: normalized.startDatetime ?? new Date(record.updatedAt).toISOString(),
+        startDatetime: normalized.startDatetime ?? undefined,
+        endDatetime: normalized.endDatetime ?? undefined,
+      } as AnyEntry;
+    }
     return { id: record.id, type: record.type as CategoryId, updatedAt: record.updatedAt, ...data } as AnyEntry;
   } catch {
     return {
@@ -206,7 +219,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     closeForm();
   }
 
-  const todayCheck = entries.find((e) => e.type === "tagescheck" && daysAgo(e.date) === 0);
+  const todayCheck = entries.find((e) => e.type === "tagescheck" && dateKey(e.date) === dateKey(new Date()));
 
   async function updateTodayCheck(field: "folgsamkeit" | "energie", value: number) {
     const base = todayCheck ?? { date: nowLocalISO(), folgsamkeit: 0, energie: 0, note: "" };
@@ -290,11 +303,18 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   async function stopAloneTimer() {
     if (!aloneStart) return;
-    const endedAt = new Date().toISOString();
-    const ms = new Date(endedAt).getTime() - new Date(aloneStart).getTime();
+    const actualEnd = new Date();
+    const actualDurationMs = actualEnd.getTime() - new Date(aloneStart).getTime();
+    const startedAt = roundToMinute(aloneStart);
+    const endedAt = roundToMinute(actualEnd.toISOString());
+    const ms = aloneDurationMs(startedAt, endedAt);
     setAloneStart(null);
     await setKv("alone-start", "");
-    await saveEntry(undefined, "alone", { date: endedAt, startedAt: aloneStart, endedAt, ms });
+    if (actualDurationMs < MIN_ALONE_DURATION_MS || ms < MIN_ALONE_DURATION_MS || !startedAt || !endedAt) {
+      showToast("Unter 1 Minute nicht gespeichert");
+      return;
+    }
+    await saveEntry(undefined, "alone", { startDatetime: startedAt, endDatetime: endedAt });
     await refresh();
     showToast(`Tilly war ${formatDuration(ms)} allein`);
   }
@@ -319,14 +339,14 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   if (!ready) {
     return (
-      <div className="flex h-screen items-center justify-center bg-bg">
+      <div className="flex h-dvh items-center justify-center bg-bg">
         <PawTrailLoader />
       </div>
     );
   }
 
   return (
-    <div className="relative mx-auto flex h-screen max-w-[430px] flex-col overflow-hidden bg-bg">
+    <div className="relative mx-auto flex h-dvh max-w-[430px] flex-col overflow-hidden bg-bg">
       <div className="flex shrink-0 items-center justify-between px-5 pb-3 pt-5">
         <div className="flex items-center gap-2">
           {/* Beim Erstellen/Bearbeiten bricht der Home-Button ab (wie das X), speichert also nicht. */}
@@ -369,6 +389,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             aloneStart={aloneStart}
             onStartAlone={() => void startAloneTimer()}
             onStopAlone={() => void stopAloneTimer()}
+            onEditEntry={(entry) => openAdd(entry.type, entry)}
           />
         )}
         {view === "history" && (
@@ -406,7 +427,10 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       </div>
 
       {view !== "add" && (
-        <div className="relative shrink-0 border-t border-hairline px-5 pb-5 pt-3">
+        <div
+          className="relative shrink-0 border-t border-hairline px-5 pt-3"
+          style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 0px))" }}
+        >
           <div className="flex items-center justify-between">
             <NavButton icon={BookOpen} label="Übungen" active={view === "exercises"} onClick={() => setView("exercises")} />
             <NavButton icon={Images} label="Galerie" active={view === "gallery"} onClick={() => setView("gallery")} />
@@ -460,4 +484,3 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     </div>
   );
 }
-

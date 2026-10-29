@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Heart, Scale, StickyNote, Timer, UtensilsCrossed, Zap } from "lucide-react";
+import { Check, Clock3, Heart, Scale, StickyNote, Timer, UtensilsCrossed, Zap } from "lucide-react";
 import { ADDABLE_CATEGORIES, DAYTIME_OPTIONS, catMeta } from "@/lib/tilly/constants";
-import { dateKey, daysAgo, entrySummary, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
+import { dateForOffset, dateKey, entrySummary, fmtDateTime, formatDuration, stressLabelFor } from "@/lib/tilly/helpers";
 import type { AnyEntry, CategoryId, FoodPlanSlots } from "@/lib/tilly/types";
 import type { PatienceRecord } from "@/lib/storage/types";
 import { CatIcon, Rating, TextArea } from "./ui";
-import { PatienceStars, patienceName } from "./Calendar";
+import { DayRow, PatienceStars, patienceName } from "./Calendar";
 
 const PATIENCE_ICON = { filled: "/icons/tilly/rating-patience-filled.png", empty: "/icons/tilly/rating-patience-empty.png" };
 const SHARK_ICON = { filled: "/icons/tilly/rating-shark-filled.png", empty: "/icons/tilly/rating-shark-empty.png" };
@@ -31,6 +31,7 @@ export function HomeView({
   aloneStart,
   onStartAlone,
   onStopAlone,
+  onEditEntry,
 }: {
   entries: AnyEntry[];
   onOpenAdd: (categoryId: CategoryId) => void;
@@ -50,15 +51,18 @@ export function HomeView({
   aloneStart: string | null;
   onStartAlone: () => void;
   onStopAlone: () => void;
+  onEditEntry: (entry: AnyEntry) => void;
 }) {
+  const todayKey = dateKey(new Date());
+  const yesterdayKey = dateKey(dateForOffset(1));
   // Nur der gestrige Eintrag zaehlt: hoher Stress gestern -> heute als Ruhetag vorschlagen
-  const yesterdayStress = entries.find((e) => e.type === "stress" && daysAgo(e.date) === 1);
+  const yesterdayStress = entries.find((e) => e.type === "stress" && dateKey(e.date) === yesterdayKey);
   const showStressAlert = !!yesterdayStress && (yesterdayStress.level || 0) >= 2;
   const stressLabel = yesterdayStress ? stressLabelFor(yesterdayStress.level || 0) : "";
 
-  const showWeightReminder = !entries.some((e) => e.type === "weight" && daysAgo(e.date) === 0);
+  const showWeightReminder = !entries.some((e) => e.type === "weight" && dateKey(e.date) === todayKey);
 
-  const todayFoodEntries = entries.filter((e) => e.type === "food" && daysAgo(e.date) === 0);
+  const todayFoodEntries = entries.filter((e) => e.type === "food" && dateKey(e.date) === todayKey);
   const foodSlotsToday = DAYTIME_OPTIONS.filter((d) => foodPlanSlots[d]?.food?.trim());
 
   // Erzwingt jede Sekunde einen Re-Render, waehrend der Alleine-Timer laeuft, damit die
@@ -70,7 +74,6 @@ export function HomeView({
     return () => clearInterval(id);
   }, [aloneStart]);
   const [othersOpen, setOthersOpen] = useState(false);
-  const todayKey = dateKey(new Date());
   // Bekannt sind andere Nutzer nur durch fruehere Eintraege; ohne Eintrag heute gilt 0/5.
   const others = Object.values(
     allPatience
@@ -87,29 +90,43 @@ export function HomeView({
   const aloneElapsedMs = aloneStart ? Date.now() - new Date(aloneStart).getTime() : 0;
   const aloneLast = [...entries].filter((e) => e.type === "alone").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
+  // Tagescheck steckt schon in der "Heute"-Karte und taucht hier deshalb nicht noch einmal auf.
+  const todayEntries = entries
+    .filter((e) => e.type !== "tagescheck" && dateKey(e.date) === todayKey)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
   const aloneCard = (
-      <div className="mb-4 rounded-2xl border border-hairline bg-card p-4">
-        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
-          <Timer size={15} className="text-plum" /> {catMeta("alone").label}
-        </div>
-        {aloneStart ? (
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-2xl font-bold tabular-nums text-ink">{formatDuration(aloneElapsedMs)}</div>
-            <button onClick={onStopAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
-              Stop
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm text-ink-soft">
-              {aloneLast ? `Zuletzt: ${entrySummary(aloneLast)}` : "Noch nicht erfasst"}
-            </div>
-            <button onClick={onStartAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
-              Start
-            </button>
-          </div>
-        )}
+    <div className="mb-4 rounded-2xl border border-hairline bg-card p-4">
+      <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+        <Timer size={15} className="text-plum" /> {catMeta("alone").label}
       </div>
+      {aloneStart ? (
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-2xl font-bold tabular-nums text-ink">{formatDuration(aloneElapsedMs)}</div>
+          <button onClick={onStopAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
+            Stop
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 text-sm text-ink-soft">
+            {aloneLast ? (
+              <button onClick={() => onEditEntry(aloneLast)} className="text-left underline decoration-hairline underline-offset-2">
+                Zuletzt: {entrySummary(aloneLast) || fmtDateTime(aloneLast.date)}
+              </button>
+            ) : (
+              "Noch nicht erfasst"
+            )}
+            <button onClick={() => onOpenAdd("alone")} className="mt-1 block text-xs text-plum">
+              + Nachtragen
+            </button>
+          </div>
+          <button onClick={onStartAlone} className="shrink-0 rounded-full bg-plum px-4 py-2 text-sm font-medium text-white">
+            Start
+          </button>
+        </div>
+      )}
+    </div>
   );
 
   return (
@@ -217,6 +234,20 @@ export function HomeView({
         ))}
       </div>
 
+      <div className="mb-4 rounded-2xl border border-hairline bg-card p-4">
+        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+          <Clock3 size={15} className="text-ink-soft" /> Verlauf heute
+        </div>
+        {todayEntries.length === 0 ? (
+          <div className="text-sm text-ink-soft">Heute noch nichts eingetragen.</div>
+        ) : (
+          <div className="space-y-2">
+            {todayEntries.map((e) => (
+              <DayRow key={e.id} entry={e} onClick={onEditEntry} />
+            ))}
+          </div>
+        )}
+      </div>
       {!aloneStart && aloneCard}
 
       <div className="mt-2 rounded-2xl border border-hairline bg-card p-4">

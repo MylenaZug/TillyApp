@@ -22,6 +22,8 @@ sqlite.exec(`
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
     data TEXT NOT NULL,
+    start_datetime TEXT,
+    end_datetime TEXT,
     updated_at INTEGER NOT NULL,
     deleted INTEGER NOT NULL DEFAULT 0
   );
@@ -114,6 +116,34 @@ describe("POST /api/sync", () => {
 
     const row = sqlite.prepare("SELECT value FROM kv_store WHERE key = 'note'").get() as { value: string };
     expect(row.value).toBe("neu");
+  });
+
+  it("migriert alte Alleine-Eintraege beim Sync in die eigenen Zeitspalten", async () => {
+    mockAuth.mockResolvedValue({ user: { email: "a@example.com" } });
+    await POST(
+      jsonRequest("http://localhost/api/sync", {
+        entries: [
+          {
+            id: "alone-legacy",
+            type: "alone",
+            data: JSON.stringify({
+              date: "2026-03-05T10:30:20.000Z",
+              startedAt: "2026-03-05T09:00:20.000Z",
+              endedAt: "2026-03-05T10:30:20.000Z",
+              ms: 5_400_000,
+            }),
+            updatedAt: 10,
+          },
+        ],
+      }),
+    );
+
+    const row = sqlite
+      .prepare("SELECT data, start_datetime, end_datetime FROM entries WHERE id = 'alone-legacy'")
+      .get() as { data: string; start_datetime: string; end_datetime: string };
+    expect(row.start_datetime).toBe("2026-03-05T09:00:00.000Z");
+    expect(row.end_datetime).toBe("2026-03-05T10:30:00.000Z");
+    expect(JSON.parse(row.data)).toEqual({});
   });
 
   it("ordnet dailyPatience immer der angemeldeten Session zu und haelt Accounts getrennt", async () => {

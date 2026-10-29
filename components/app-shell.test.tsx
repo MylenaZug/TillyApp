@@ -100,7 +100,7 @@ describe("AppShell", () => {
     expect(await screen.findByText("Keine Einträge in dieser Kategorie.")).toBeInTheDocument();
   });
 
-  it("stuerzt bei fehlerhaftem JSON in einem Eintrag nicht ab und zeigt einen Fallback-Text", async () => {
+  it("stuerzt bei fehlerhaftem JSON in einem Eintrag nicht ab und zeigt keinen Platzhalter-Text", async () => {
     mockListEntries.mockResolvedValue([makeEntry({ id: "broken", type: "food", data: "{not-json" })]);
     const user = userEvent.setup();
 
@@ -108,7 +108,9 @@ describe("AppShell", () => {
     await waitFor(() => expect(mockListEntries).toHaveBeenCalled());
     await user.click(screen.getByRole("button", { name: "Verlauf" }));
 
-    expect((await screen.findAllByText("Eintrag gespeichert")).length).toBeGreaterThan(0);
+    // Filter-Chip + Zeile in der Timeline
+    expect((await screen.findAllByText("Futter")).length).toBeGreaterThan(1);
+    expect(screen.queryByText("Eintrag gespeichert")).not.toBeInTheDocument();
   });
 
   it("zeigt den Offline-Status aus useSyncStatus an", async () => {
@@ -117,6 +119,7 @@ describe("AppShell", () => {
     render(<AppShell userEmail="a@example.com" />);
 
     expect(await screen.findByRole("button", { name: /Offline/ })).toBeInTheDocument();
+    expect(await screen.findByTitle("a@example.com · Sync – Offline")).toBeInTheDocument();
   });
 
   it("zeigt die Anzahl ausstehender Aenderungen an", async () => {
@@ -125,6 +128,7 @@ describe("AppShell", () => {
     render(<AppShell userEmail="a@example.com" />);
 
     expect(await screen.findByRole("button", { name: /2 ausstehend/ })).toBeInTheDocument();
+    expect(await screen.findByTitle(/a@example.com · Sync – .*2 ausstehend/)).toBeInTheDocument();
   });
 
   it("loest den Sync ueber den Sync-Button aus", async () => {
@@ -177,7 +181,7 @@ describe("AppShell", () => {
     expect(stop.compareDocumentPosition(heute) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("speichert beim Stoppen Start, Ende und Dauer und beendet den Timer", async () => {
+  it("speichert beim Stoppen nur Start und Ende und beendet den Timer", async () => {
     const startedAt = new Date(Date.now() - 90 * 60_000).toISOString();
     mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? startedAt : null));
     const user = userEvent.setup();
@@ -189,11 +193,24 @@ describe("AppShell", () => {
     const [id, type, data] = mockSaveEntry.mock.calls[0];
     expect(id).toBeUndefined();
     expect(type).toBe("alone");
-    expect(data.startedAt).toBe(startedAt);
-    expect(data.ms).toBeGreaterThanOrEqual(90 * 60_000);
-    expect(data.endedAt).toBe(data.date);
+    expect(data.startDatetime).toBe(new Date(Math.round(new Date(startedAt).getTime() / 60_000) * 60_000).toISOString());
+    expect(data).not.toHaveProperty("date");
+    expect(data).not.toHaveProperty("ms");
+    expect(new Date(data.endDatetime).getTime() - new Date(data.startDatetime).getTime()).toBe(90 * 60_000);
     expect(mockSetKv).toHaveBeenCalledWith("alone-start", "");
     await waitFor(() => expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument());
+  });
+
+  it("loescht einen Timer unter einer Minute ohne einen Eintrag zu speichern", async () => {
+    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? new Date(Date.now() - 30_000).toISOString() : null));
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+
+    await user.click(await screen.findByRole("button", { name: "Stop" }));
+
+    expect(mockSaveEntry).not.toHaveBeenCalled();
+    expect(await screen.findByText("Unter 1 Minute nicht gespeichert")).toBeInTheDocument();
+    expect(mockSetKv).toHaveBeenCalledWith("alone-start", "");
   });
 
   it("zeigt die Geduld der anderen eingeklappt und klappt sie auf Wunsch mit Namen auf", async () => {
@@ -243,7 +260,7 @@ describe("AppShell", () => {
 
     await user.click(await screen.findByRole("button", { name: "Geduld der anderen" }));
 
-    expect(screen.getByText("Ben")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "0 von 5" })).toBeInTheDocument();
-  });
+  expect(screen.getByText("Ben")).toBeInTheDocument();
+  expect(screen.getByRole("img", { name: "0 von 5" })).toBeInTheDocument();
+});
 });
