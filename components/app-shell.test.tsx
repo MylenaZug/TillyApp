@@ -24,6 +24,7 @@ vi.mock("@/lib/storage", () => ({
   getKv: (key: string) => mockGetKv(key),
   setKv: (...args: unknown[]) => mockSetKv(...args),
   getLoadedFrom: async () => null,
+  isHistoryComplete: async () => false,
   loadEntries: async () => false,
   fetchEntriesSince: async () => [],
 }));

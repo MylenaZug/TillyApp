@@ -122,6 +122,7 @@ export const localDb = {
     return {
       token: ((await db.get("meta", "token")) as number | undefined) ?? null,
       loadedFrom: ((await db.get("meta", "loadedFrom")) as number | undefined) ?? null,
+      earliestAt: ((await db.get("meta", "earliestAt")) as number | undefined) ?? null,
     };
   },
   async resetSyncState() {
@@ -133,7 +134,7 @@ export const localDb = {
    * Speichert nachgeladene Eintraege (ohne noch nicht gesendete lokale Aenderungen zu ueberschreiben)
    * und setzt optional `loadedFrom` nach vorne.
    */
-  async putLoadedEntries(rows: WireEntry[], loadedFrom?: number) {
+  async putLoadedEntries(rows: WireEntry[], loadedFrom?: number, earliestAt?: number | null) {
     const db = await open();
     const tx = db.transaction(["entries", "queueEntries", "meta"], "readwrite");
     const queued = new Set(await tx.objectStore("queueEntries").getAllKeys());
@@ -153,6 +154,7 @@ export const localDb = {
       const current = (await tx.objectStore("meta").get("loadedFrom")) as number | undefined;
       if (current === undefined || loadedFrom < current) await tx.objectStore("meta").put(loadedFrom, "loadedFrom");
     }
+    if (earliestAt != null) await tx.objectStore("meta").put(earliestAt, "earliestAt");
     await tx.done;
   },
 
@@ -213,6 +215,7 @@ export const localDb = {
 
     await tx.objectStore("meta").put(response.token, "token");
     if (response.full && response.windowStart !== null) await tx.objectStore("meta").put(response.windowStart, "loadedFrom");
+    if (response.full && response.earliestAt !== null) await tx.objectStore("meta").put(response.earliestAt, "earliestAt");
     await tx.done;
   },
 };

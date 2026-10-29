@@ -32,4 +32,6 @@ export type SyncMeta = {
   token: number | null;
   // Fruehester Zeitpunkt, ab dem Eintraege lokal vollstaendig vorliegen (aelteres wird nachgeladen).
   loadedFrom: number | null;
+  // Aeltester Eintrag auf dem Server; null = unbekannt oder keine Eintraege.
+  earliestAt: number | null;
 };

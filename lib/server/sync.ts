@@ -13,6 +13,12 @@ export function checkProtocol(request: Request): NextResponse | null {
   );
 }
 
+/** Start des aeltesten (nicht geloeschten) Eintrags; null, wenn es keine gibt. */
+export function earliestEntryAt(): number | null {
+  const row = db.select({ at: sql<number | null>`min(${entries.startAt})` }).from(entries).where(eq(entries.deleted, 0)).get();
+  return row?.at ?? null;
+}
+
 export function currentSeq(): number {
   return db.select().from(syncState).where(eq(syncState.id, 1)).get()?.seq ?? 0;
 }

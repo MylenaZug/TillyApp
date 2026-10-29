@@ -12,6 +12,7 @@ const pull = (over: object = {}) => ({
   token: 5,
   full: true,
   windowStart: T - 1000,
+  earliestAt: null,
   kv: [],
   entries: [],
   dailyPatience: [],

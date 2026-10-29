@@ -3,7 +3,7 @@ import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db/client";
 import { entries } from "@/db/schema";
-import { checkProtocol, toWireEntry } from "@/lib/server/sync";
+import { checkProtocol, earliestEntryAt, toWireEntry } from "@/lib/server/sync";
 import { MAX_ENTRIES_PER_RANGE_REQUEST } from "@/lib/tilly/protocol";
 import { categoryIdSchema } from "@/lib/tilly/schemas";
 
@@ -44,5 +44,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     entries: rows.slice(0, MAX_ENTRIES_PER_RANGE_REQUEST).map(toWireEntry),
     truncated,
+    earliestAt: earliestEntryAt(),
   });
 }

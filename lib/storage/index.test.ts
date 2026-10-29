@@ -176,7 +176,7 @@ describe("Nachladen vom Server", () => {
   });
 
   it("loadEntries speichert Eintraege und rueckt loadedFrom vor", async () => {
-    await localDb.applyPull({ protocol: 3, token: 1, full: true, windowStart: 5000, entries: [], kv: [], dailyPatience: [] });
+    await localDb.applyPull({ protocol: 3, token: 1, full: true, windowStart: 5000, earliestAt: 1000, entries: [], kv: [], dailyPatience: [] });
     respond([{ entries: [wire("old", 1500)], truncated: false }]);
 
     expect(await loadEntries({ from: 1000 })).toBe(true);

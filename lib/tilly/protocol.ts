@@ -29,6 +29,8 @@ export type SyncPullResponse = {
   // true: Fenster-Antwort ohne Token, der Client ersetzt seinen Bestand; false: Delta seit dem Token.
   full: boolean;
   windowStart: number | null;
+  // Start des aeltesten Eintrags auf dem Server (nur bei full); damit weiss der Client, wann nichts Aelteres mehr kommt.
+  earliestAt: number | null;
   kv: WireKv[];
   entries: WireEntry[];
   dailyPatience: WirePatience[];

@@ -7,6 +7,7 @@ import {
   getKv,
   fetchEntriesSince,
   getLoadedFrom,
+  isHistoryComplete,
   getPatience,
   loadEntries,
   listPatience,
@@ -96,6 +97,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const sync = useSyncStatus();
 
   const [loadedFrom, setLoadedFrom] = useState<number | null>(null);
+  const [historyComplete, setHistoryComplete] = useState(false);
 
   async function loadOlder(from?: number) {
     const current = await getLoadedFrom();
@@ -108,43 +110,51 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   // Beim Zurueckblaettern im Kalender bei Bedarf nachladen.
   async function ensureLoaded(date: Date) {
     const current = await getLoadedFrom();
-    if (current !== null && date.getTime() < current) await loadOlder(date.getTime());
+    if (current !== null && date.getTime() < current && !(await isHistoryComplete())) await loadOlder(date.getTime());
   }
 
   const loadAllEntries = useCallback(async () => (await fetchEntriesSince(0)).map(parseEntryRecord), []);
 
   async function refresh() {
     setLoadedFrom(await getLoadedFrom());
+    setHistoryComplete(await isHistoryComplete());
     const records = await listEntries();
     const parsed = records.map(parseEntryRecord).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setEntries(parsed);
   }
 
+  // Liest Einstellungen, Eintraege und Geduld aus dem lokalen Store. Laeuft beim Start und nach
+  // jedem Sync - beim allerersten Start ist der Store beim Rendern noch leer.
+  async function loadFromStore(afterSync: boolean) {
+    const [t, f, s, ex, gn, fp, fps, as] = await Promise.all([
+      getKv("training-types"),
+      getKv("food-types"),
+      getKv("symptom-types"),
+      getKv("exercises"),
+      getKv("general-note"),
+      getKv("food-plan"),
+      getKv("food-plan-slots"),
+      getKv("alone-start"),
+    ]);
+    if (t) setTrainingTypes(JSON.parse(t));
+    if (f) setFoodTypes(JSON.parse(f));
+    if (s) setSymptomTypes(JSON.parse(s));
+    // Eine gerade getippte Notiz nicht durch den Serverstand ueberschreiben.
+    if (gn && !(afterSync && noteTimerRef.current)) setGeneralNote(gn);
+    if (fp) setFoodPlan(fp);
+    if (fps) setFoodPlanSlots(JSON.parse(fps));
+    if (as) setAloneStart(as);
+    // Standanduebungen kommen als DB-Seed (siehe db/seed.ts) bereits befuellt aus dem
+    // kv_store - hier nur noch laden, kein Runtime-Merge/Seed im Client mehr noetig.
+    if (ex) setExercises(JSON.parse(ex));
+
+    await Promise.all([refresh(), getPatience(userEmail, dateKey(new Date())).then(setPatience), listPatience().then(setAllPatience)]);
+  }
+
   useEffect(() => {
     (async () => {
       try {
-        const [t, f, s, ex, gn, fp, fps, as] = await Promise.all([
-          getKv("training-types"),
-          getKv("food-types"),
-          getKv("symptom-types"),
-          getKv("exercises"),
-          getKv("general-note"),
-          getKv("food-plan"),
-          getKv("food-plan-slots"),
-          getKv("alone-start"),
-        ]);
-        if (t) setTrainingTypes(JSON.parse(t));
-        if (f) setFoodTypes(JSON.parse(f));
-        if (s) setSymptomTypes(JSON.parse(s));
-        if (gn) setGeneralNote(gn);
-        if (fp) setFoodPlan(fp);
-        if (fps) setFoodPlanSlots(JSON.parse(fps));
-        if (as) setAloneStart(as);
-        // Standanduebungen kommen als DB-Seed (siehe db/seed.ts) bereits befuellt aus dem
-        // kv_store - hier nur noch laden, kein Runtime-Merge/Seed im Client mehr noetig.
-        if (ex) setExercises(JSON.parse(ex));
-
-        await Promise.all([refresh(), getPatience(userEmail, dateKey(new Date())).then(setPatience), listPatience().then(setAllPatience)]);
+        await loadFromStore(false);
       } finally {
         setReady(true);
       }
@@ -159,10 +169,11 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
-  // Geduld der anderen kommt per Sync - nach jedem erfolgreichen Sync neu einlesen.
+  // Alles, was per Sync kommt (Eintraege, Einstellungen, Geduld der anderen), nach jedem Sync neu einlesen.
   useEffect(() => {
     if (!sync.lastSyncAt) return;
-    void listPatience().then(setAllPatience);
+    void loadFromStore(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sync.lastSyncAt]);
 
   function showToast(message: string) {
@@ -256,6 +267,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     if (noteTimerRef.current) clearTimeout(noteTimerRef.current);
     noteTimerRef.current = setTimeout(async () => {
       try {
+        noteTimerRef.current = null;
         await setKv("general-note", text);
         setNoteStatus("saved");
         setTimeout(() => setNoteStatus(""), 1500);
@@ -409,7 +421,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           />
         )}
         {view === "history" && (
-          <HistoryView patience={allPatience} loadedFrom={loadedFrom} onLoadOlder={() => loadOlder()} onReachDate={(d) => void ensureLoaded(d)} entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
+          <HistoryView patience={allPatience} loadedFrom={loadedFrom} historyComplete={historyComplete} onLoadOlder={() => loadOlder()} onReachDate={(d) => void ensureLoaded(d)} entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
         )}
         {view === "analysis" && <AnalysisView entries={entries} loadAll={loadAllEntries} onAddWeight={() => openAdd("weight")} />}
         {view === "gallery" && <GalleryView />}

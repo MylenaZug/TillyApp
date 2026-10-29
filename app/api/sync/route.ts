@@ -3,7 +3,7 @@ import { and, eq, gt, gte } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db/client";
 import { dailyPatience, entries, kvStore } from "@/db/schema";
-import { checkProtocol, currentSeq, nextSeq, toWireEntry } from "@/lib/server/sync";
+import { checkProtocol, currentSeq, earliestEntryAt, nextSeq, toWireEntry } from "@/lib/server/sync";
 import { displayNameFor } from "@/lib/server/uploads";
 import {
   SYNC_PROTOCOL_VERSION,
@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
     token: seq,
     full: since === null,
     windowStart,
+    earliestAt: since === null ? earliestEntryAt() : null,
     kv: kvRows,
     entries: entryRows.map(toWireEntry),
     dailyPatience: patienceRows.map((r) => ({ ...r, userName: displayNameFor(r.userEmail) })),

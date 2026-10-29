@@ -62,6 +62,12 @@ export async function saveEntry(
   return row;
 }
 
+/** true, wenn lokal alles bis zum aeltesten Eintrag des Servers vorliegt. */
+export async function isHistoryComplete(): Promise<boolean> {
+  const { loadedFrom, earliestAt } = await localDb.getMeta();
+  return loadedFrom !== null && (earliestAt === null || loadedFrom <= earliestAt);
+}
+
 /** Fruehester Zeitpunkt, ab dem Eintraege lokal vollstaendig vorliegen (null: noch nicht synchronisiert). */
 export async function getLoadedFrom(): Promise<number | null> {
   return (await localDb.getMeta()).loadedFrom;
@@ -79,17 +85,20 @@ export async function loadEntries(options: { from: number; type?: string }): Pro
   const { loadedFrom } = await localDb.getMeta();
   if (loadedFrom === null && !options.type) return false;
   const to = options.type ? Date.now() + DAY_MS : loadedFrom!;
-  const from = Math.max(0, options.from);
+  let from = Math.max(0, options.from);
+  const { earliestAt } = await localDb.getMeta();
+  // Nicht ueber den aeltesten Eintrag des Servers hinaus blaettern.
+  if (!options.type && earliestAt !== null && from < earliestAt) from = earliestAt;
   if (to <= from) return true;
   try {
     const query = new URLSearchParams({ from: String(from), to: String(to) });
     if (options.type) query.set("type", options.type);
     const res = await fetch(`/api/entries?${query}`, { credentials: "include", headers: { [SYNC_PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION) } });
     if (!res.ok) return false;
-    const body = (await res.json()) as { entries: WireEntry[]; truncated: boolean };
+    const body = (await res.json()) as { entries: WireEntry[]; truncated: boolean; earliestAt: number | null };
     // Bei abgeschnittener Antwort reicht das Fenster nur bis zum aeltesten gelieferten Eintrag.
     const covered = body.truncated ? Math.min(...body.entries.map((e) => e.startAt)) : from;
-    await localDb.putLoadedEntries(body.entries, options.type ? undefined : covered);
+    await localDb.putLoadedEntries(body.entries, options.type ? undefined : covered, body.earliestAt);
     notifyStorageChange();
     return !body.truncated;
   } catch {

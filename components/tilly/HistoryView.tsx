@@ -14,6 +14,7 @@ export function HistoryView({
   onEdit,
   patience = [],
   loadedFrom = null,
+  historyComplete = false,
   onLoadOlder,
   onReachDate,
 }: {
@@ -23,6 +24,7 @@ export function HistoryView({
   onEdit: (entry: AnyEntry) => void;
   patience?: PatienceRecord[];
   loadedFrom?: number | null;
+  historyComplete?: boolean;
   onLoadOlder?: () => Promise<boolean>;
   onReachDate?: (date: Date) => void;
 }) {
@@ -80,9 +82,12 @@ export function HistoryView({
 
       {onLoadOlder && loadedFrom !== null && (
         <div className="py-4 text-center">
-          <div className="mb-2 text-xs text-ink-soft">
-            Geladen ab {new Date(loadedFrom).toLocaleDateString("de-DE")}
-          </div>
+          {!historyComplete && (
+            <div className="mb-2 text-xs text-ink-soft">Geladen ab {new Date(loadedFrom).toLocaleDateString("de-DE")}</div>
+          )}
+          {historyComplete ? (
+            <div className="text-sm text-ink-soft">Alle Einträge geladen</div>
+          ) : (
           <button
             disabled={loading}
             onClick={async () => {
@@ -97,6 +102,7 @@ export function HistoryView({
           >
             {loading ? "Lädt…" : "Ältere Einträge laden"}
           </button>
+          )}
         </div>
       )}
     </div>
