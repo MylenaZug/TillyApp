@@ -1,53 +1,23 @@
-export type CategoryId =
-  | "food"
-  | "stool"
-  | "training"
-  | "stress"
-  | "symptom"
-  | "weight"
-  | "vet"
-  | "kosten"
-  | "tagescheck"
-  | "alone";
+import type { CategoryId, EntryDataByType } from "./schemas";
 
-type BaseEntryData = { date: string; note?: string };
-
-export type StoolData = BaseEntryData & {
-  consistency: string[];
-  stoolAmount: string;
-  color: string;
-  flags: string[];
-};
-export type TrainingData = BaseEntryData & { activity: string; dogStars: number; trainerStars: number };
-export type WeightData = BaseEntryData & { kg: number; daytime: string };
-export type FoodData = BaseEntryData & { food: string; amount?: number; amountUnit?: string; daytime?: string };
+// Die Eintragstypen werden aus den Zod-Schemas in schemas.ts abgeleitet (einzige Quelle).
+export type { CategoryId, EntryDataByType };
+export type StoolData = EntryDataByType["stool"];
+export type TrainingData = EntryDataByType["training"];
+export type WeightData = EntryDataByType["weight"];
+export type FoodData = EntryDataByType["food"];
+export type VetData = EntryDataByType["vet"];
+export type SymptomData = EntryDataByType["symptom"];
+export type StressData = EntryDataByType["stress"];
+export type KostenData = EntryDataByType["kosten"];
+export type TagescheckData = EntryDataByType["tagescheck"];
+export type AloneData = EntryDataByType["alone"];
 
 // Fester Futterplan pro Tageszeit (Morgens/Mittags/Abends, siehe DAYTIME_OPTIONS) - fuer
 // alles, was nicht ins Schema passt, gibt es weiterhin das freie Notizfeld im Storage
 // unter dem kv-Key "food-plan".
 export type FoodPlanSlot = { food: string; amount?: number; amountUnit?: string };
 export type FoodPlanSlots = Record<string, FoodPlanSlot>;
-export type VetData = BaseEntryData & { reason: string };
-export type SymptomData = BaseEntryData & { category: string };
-export type StressData = BaseEntryData & { level: number };
-export type KostenData = BaseEntryData & { category: string; amount: number };
-export type TagescheckData = BaseEntryData & { folgsamkeit: number; energie: number };
-// Start und Ende liegen als eigene Datenbankfelder auf dem Eintrag; ein eigenes `date` wird
-// nicht gespeichert (es ergibt sich beim Laden aus dem Start), die Dauer wird berechnet.
-export type AloneData = { startDatetime: string; endDatetime: string; note?: string };
-
-export type EntryDataByType = {
-  food: FoodData;
-  stool: StoolData;
-  training: TrainingData;
-  stress: StressData;
-  symptom: SymptomData;
-  weight: WeightData;
-  vet: VetData;
-  kosten: KostenData;
-  tagescheck: TagescheckData;
-  alone: AloneData;
-};
 
 // Flache Sicht auf einen Eintrag (wie im alten Firebase-Prototyp): id/type/updatedAt
 // vom Storage-Layer plus die typspezifischen Felder aus `data` auf einer Ebene.
