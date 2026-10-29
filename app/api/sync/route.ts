@@ -4,7 +4,8 @@ import { auth } from "@/auth";
 import { db } from "@/db/client";
 import { dailyPatience, entries, kvStore } from "@/db/schema";
 import { displayNameFor } from "@/lib/server/uploads";
-import { normalizeAloneData } from "@/lib/tilly/alone";
+import { legacyRange } from "@/db/migrate-data";
+import { parseEntry } from "@/lib/tilly/schemas";
 
 type KvMutation = { key: string; value: string; updatedAt: number };
 type EntryMutation = {
@@ -17,6 +18,16 @@ type EntryMutation = {
   deleted?: 0 | 1;
 };
 type PatienceMutation = { date: string; geduld: number; updatedAt: number };
+
+// Uebergang bis zur neuen Sync-API (naechster Schritt): Die Leitung spricht noch das alte
+// Format (ISO-Strings, `date` in data); die DB speichert bereits Epoch-ms ohne `date`.
+function toWireEntry(row: typeof entries.$inferSelect) {
+  const { startAt, endAt, serverSeq: _serverSeq, ...rest } = row;
+  const startDatetime = new Date(startAt).toISOString();
+  const data = JSON.parse(row.data) as Record<string, unknown>;
+  if (row.type !== "alone") data.date = startDatetime;
+  return { ...rest, data: JSON.stringify(data), startDatetime, endDatetime: new Date(endAt).toISOString() };
+}
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -35,7 +46,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     serverTime: Date.now(),
     kv: kvRows,
-    entries: entryRows,
+    entries: entryRows.map(toWireEntry),
     dailyPatience: patienceRows.map((r) => ({ ...r, userName: displayNameFor(r.userEmail) })),
   });
 }
@@ -69,25 +80,25 @@ export async function POST(request: NextRequest) {
   }
 
   for (const row of entryMutations) {
-    let data = row.data;
-    let startDatetime = row.startDatetime ?? null;
-    let endDatetime = row.endDatetime ?? null;
-    if (row.type === "alone") {
-      try {
-        const normalized = normalizeAloneData(JSON.parse(row.data), startDatetime, endDatetime);
-        data = JSON.stringify(normalized.data);
-        startDatetime = normalized.startDatetime;
-        endDatetime = normalized.endDatetime;
-      } catch {
-        // Keep malformed legacy payloads intact rather than rejecting unrelated sync batches.
-      }
+    let parsedData: unknown;
+    try {
+      parsedData = JSON.parse(row.data);
+    } catch {
+      continue;
     }
+    const range = legacyRange(row.type, {
+      ...(parsedData as Record<string, unknown>),
+      ...(row.startDatetime ? { startDatetime: row.startDatetime } : {}),
+      ...(row.endDatetime ? { endDatetime: row.endDatetime } : {}),
+    });
+    const parsed = parseEntry({ type: row.type, ...range, data: parsedData });
+    if (!parsed.ok) continue;
     const values = {
       id: row.id,
       type: row.type,
-      data,
-      startDatetime,
-      endDatetime,
+      data: JSON.stringify(parsed.data),
+      startAt: parsed.startAt,
+      endAt: parsed.endAt,
       updatedAt: row.updatedAt,
       deleted: row.deleted ?? 0,
     };
@@ -99,8 +110,8 @@ export async function POST(request: NextRequest) {
         set: {
           type: values.type,
           data: values.data,
-          startDatetime: values.startDatetime,
-          endDatetime: values.endDatetime,
+          startAt: values.startAt,
+          endAt: values.endAt,
           updatedAt: values.updatedAt,
           deleted: values.deleted,
         },

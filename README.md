@@ -42,10 +42,8 @@ die Build-Tools mit, die `better-sqlite3` zum Kompilieren braucht. Beim ersten S
 `.devcontainer/setup.sh` automatisch `.env` (inkl. generiertem `AUTH_SECRET`) ein.
 
 ```bash
-# Beim ersten Start: Migration aus dem aktuellen Schema erzeugen und anwenden
-npm run db:generate
+# Migrationen anwenden (läuft auch automatisch beim Serverstart, idempotent)
 npm run db:migrate
-npm run db:migrate:alone
 
 # Übungsbibliothek einmalig befüllen (idempotent)
 npm run db:seed
@@ -55,11 +53,14 @@ npm run dev
 
 Beim Erstellen oder erneuten Öffnen des Dev Containers führt
 `.devcontainer/setup.sh` automatisch `npm install` aus und legt bei Bedarf `.env`
-mit einem generierten `AUTH_SECRET` an. Die Datenbankbefehle werden absichtlich
-nicht automatisch ausgeführt: `db:generate` ist eine Entwickleraktion bei
-Schemaänderungen, während `db:migrate`, `db:migrate:alone` und `db:seed` nach dem
-ersten Setup oder bei Bedarf manuell ausgeführt werden. `db:migrate:alone` ergänzt
-die Start-/Endzeitpunkt-Spalten und migriert ältere Alleine-Einträge aus dem JSON-Feld.
+mit einem generierten `AUTH_SECRET` an.
+
+Migrationen liegen in `drizzle/` (eingecheckt) und werden beim Serverstart automatisch
+angewendet (`instrumentation.ts`); vorher entsteht neben der DB eine Kopie
+`<db>.pre-migrate-<zeit>.bak`. Danach läuft die idempotente Datenmigration
+(`db/migrate-data.ts`: Zeiträume, bereinigtes `data`-JSON, `server_seq`); nicht umwandelbare
+Einträge brechen den Start mit ID-Liste ab. Bereits angewendete Migrationsdateien nie ändern,
+Schemaänderungen immer über `npm run db:generate` als neue Datei erzeugen.
 
 Benötigte Umgebungsvariablen siehe `.env.example`. Ohne echte `GOOGLE_CLIENT_ID`/`SECRET`
 funktioniert lokal trotzdem alles über den automatischen Dev-Login (`DEV_USER_EMAIL`).
@@ -75,8 +76,7 @@ funktioniert lokal trotzdem alles über den automatischen Dev-Login (`DEV_USER_E
 | `npm run test`         | Vitest einmalig ausführen                                            |
 | `npm run test:watch`   | Vitest im Watch-Modus                                                |
 | `npm run db:generate`  | Drizzle-Migration aus `db/schema.ts` erzeugen                        |
-| `npm run db:migrate`   | Migration auf `DB_PATH` anwenden                                     |
-| `npm run db:migrate:alone` | Start-/Endzeitpunkte für Alleine-Einträge migrieren                 |
+| `npm run db:migrate`   | Schema- und Datenmigration auf `DB_PATH` anwenden (wie beim Serverstart) |
 | `npm run backup`       | DB + Galerie-Fotos als `backups/tilly-<zeit>.tar.gz` sichern (`BACKUP_DIR`, `BACKUP_KEEP`, Default 14) |
 | `npm run restore -- <datei> --yes` | Backup einspielen (App vorher stoppen; alter Stand bleibt als `.before-restore-*`) |
 | `npm run db:seed`      | Standardübungen einmalig in den `kv_store` einspielen (idempotent)   |

@@ -4,7 +4,9 @@
 // mit gemocktem Auth-Modul statt einer echten Google-Session.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Database from "better-sqlite3";
+import path from "node:path";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { NextRequest } from "next/server";
 import * as schema from "@/db/schema";
 
@@ -12,29 +14,7 @@ const mockAuth = vi.fn();
 vi.mock("@/auth", () => ({ auth: () => mockAuth() }));
 
 const sqlite = new Database(":memory:");
-sqlite.exec(`
-  CREATE TABLE kv_store (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    updated_at INTEGER NOT NULL
-  );
-  CREATE TABLE entries (
-    id TEXT PRIMARY KEY,
-    type TEXT NOT NULL,
-    data TEXT NOT NULL,
-    start_datetime TEXT,
-    end_datetime TEXT,
-    updated_at INTEGER NOT NULL,
-    deleted INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE TABLE daily_patience (
-    user_email TEXT NOT NULL,
-    date TEXT NOT NULL,
-    geduld INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    PRIMARY KEY (user_email, date)
-  );
-`);
+migrate(drizzle(sqlite), { migrationsFolder: path.join(process.cwd(), "drizzle") });
 const mockDb = drizzle(sqlite, { schema });
 vi.mock("@/db/client", () => ({ db: mockDb }));
 
@@ -118,7 +98,7 @@ describe("POST /api/sync", () => {
     expect(row.value).toBe("neu");
   });
 
-  it("migriert alte Alleine-Eintraege beim Sync in die eigenen Zeitspalten", async () => {
+  it("speichert alte Alleine-Eintraege beim Sync als Epoch-ms-Zeitraum", async () => {
     mockAuth.mockResolvedValue({ user: { email: "a@example.com" } });
     await POST(
       jsonRequest("http://localhost/api/sync", {
@@ -139,10 +119,10 @@ describe("POST /api/sync", () => {
     );
 
     const row = sqlite
-      .prepare("SELECT data, start_datetime, end_datetime FROM entries WHERE id = 'alone-legacy'")
-      .get() as { data: string; start_datetime: string; end_datetime: string };
-    expect(row.start_datetime).toBe("2026-03-05T09:00:00.000Z");
-    expect(row.end_datetime).toBe("2026-03-05T10:30:00.000Z");
+      .prepare("SELECT data, start_at, end_at FROM entries WHERE id = 'alone-legacy'")
+      .get() as { data: string; start_at: number; end_at: number };
+    expect(row.start_at).toBe(Date.UTC(2026, 2, 5, 9, 0));
+    expect(row.end_at).toBe(Date.UTC(2026, 2, 5, 10, 30));
     expect(JSON.parse(row.data)).toEqual({});
   });
 

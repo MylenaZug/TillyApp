@@ -3,6 +3,7 @@ import path from "node:path";
 import type Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { migrateData } from "./migrate-data";
 
 export const MIGRATIONS_FOLDER = path.join(process.cwd(), "drizzle");
 
@@ -22,10 +23,14 @@ function hasPendingMigrations(sqlite: Database.Database, folder: string): boolea
 
 /**
  * Wendet offene Drizzle-Migrationen an (idempotent: schon angewendete werden uebersprungen).
- * Vor offenen Migrationen auf einer nicht leeren DB wird eine Kopie neben der DB abgelegt.
+ * Danach laeuft die idempotente Datenmigration (db/migrate-data.ts). Vor offenen Migrationen
+ * auf einer nicht leeren DB wird eine Kopie neben der DB abgelegt.
  */
 export function runMigrations(sqlite: Database.Database, folder = MIGRATIONS_FOLDER): void {
-  if (!hasPendingMigrations(sqlite, folder)) return;
+  if (!hasPendingMigrations(sqlite, folder)) {
+    migrateData(sqlite);
+    return;
+  }
 
   const dbFile = sqlite.name;
   const hasData = sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' LIMIT 1").get();
@@ -34,4 +39,5 @@ export function runMigrations(sqlite: Database.Database, folder = MIGRATIONS_FOL
     sqlite.exec(`VACUUM INTO '${backup.replace(/'/g, "''")}'`);
   }
   migrate(drizzle(sqlite), { migrationsFolder: folder });
+  migrateData(sqlite);
 }

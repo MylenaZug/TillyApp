@@ -41,11 +41,19 @@ describe("runMigrations", () => {
       uploaded_by TEXT NOT NULL, created_at INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`);
     db.exec(`CREATE TABLE __drizzle_migrations (id INTEGER PRIMARY KEY, hash TEXT NOT NULL, created_at NUMERIC)`);
     db.prepare("INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('x', 1789814697992)").run();
-    db.prepare("INSERT INTO entries (id, type, data, updated_at, deleted) VALUES ('a', 'alone', '{}', 1, 0)").run();
+    db.prepare("INSERT INTO entries (id, type, data, updated_at, deleted) VALUES ('a', 'stress', ?, 1, 0)").run(
+      JSON.stringify({ date: "2026-03-05T10:30:00.000Z", level: 3 })
+    );
 
     runMigrations(db, folder);
-    expect(columns(db, "entries")).toEqual(expect.arrayContaining(["start_datetime", "end_datetime"]));
+    expect(columns(db, "entries")).toEqual(expect.arrayContaining(["start_at", "end_at", "server_seq"]));
     expect(db.prepare("SELECT COUNT(*) AS n FROM entries").get()).toEqual({ n: 1 });
+    expect(db.prepare("SELECT start_at, end_at, server_seq, data FROM entries").get()).toEqual({
+      start_at: Date.UTC(2026, 2, 5, 10, 30),
+      end_at: Date.UTC(2026, 2, 5, 10, 30),
+      server_seq: 1,
+      data: JSON.stringify({ level: 3 }),
+    });
     expect(backups()).toHaveLength(1);
 
     const backup = new Database(path.join(dir, backups()[0]), { readonly: true });
@@ -54,6 +62,7 @@ describe("runMigrations", () => {
 
     runMigrations(db, folder);
     expect(backups()).toHaveLength(1);
+    expect(db.prepare("SELECT server_seq FROM entries").get()).toEqual({ server_seq: 1 });
     db.close();
   });
 });

@@ -10,21 +10,43 @@ import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlit
 export const kvStore = sqliteTable("kv_store", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
+  // updated_at und server_seq vergibt ausschliesslich der Server beim Schreiben.
   updatedAt: integer("updated_at").notNull(),
+  serverSeq: integer("server_seq").notNull().default(0),
+});
+
+// Ein Zaehler (Zeile id = 1) fuer alle synchronisierten Tabellen: jede Aenderung bekommt die
+// naechste server_seq. Der Client merkt sich die letzte gesehene Nummer als Sync-Token.
+export const syncState = sqliteTable("sync_state", {
+  id: integer("id").primaryKey(),
+  seq: integer("seq").notNull().default(0),
 });
 
 // Ein Datensatz pro Aktivitaet (food/stool/training/stress/symptom/weight/vet/kosten/tagescheck).
 // "data" enthaelt die typspezifischen Felder als JSON; granular statt ein grosser Blob,
 // damit Offline-Aenderungen pro Eintrag gemerged werden koennen statt die ganze Liste zu ueberschreiben.
-export const entries = sqliteTable("entries", {
-  id: text("id").primaryKey(),
-  type: text("type").notNull(),
-  data: text("data").notNull(),
-  startDatetime: text("start_datetime"),
-  endDatetime: text("end_datetime"),
-  updatedAt: integer("updated_at").notNull(),
-  deleted: integer("deleted").notNull().default(0),
-});
+// Alle Eintragstypen haben einen Zeitraum in Epoch-ms (start_at/end_at; bei Punkt-Ereignissen
+// end_at = start_at) - so laesst sich per SQL effizient nach Zeitfenstern filtern.
+// Der Default 0 existiert nur, damit die Spalten per ALTER TABLE nachgeruestet werden koennen;
+// die Datenmigration (db/migrate-data.ts) ersetzt ihn, die API validiert (lib/tilly/schemas.ts).
+export const entries = sqliteTable(
+  "entries",
+  {
+    id: text("id").primaryKey(),
+    type: text("type").notNull(),
+    data: text("data").notNull(),
+    startAt: integer("start_at").notNull().default(0),
+    endAt: integer("end_at").notNull().default(0),
+    updatedAt: integer("updated_at").notNull(),
+    serverSeq: integer("server_seq").notNull().default(0),
+    deleted: integer("deleted").notNull().default(0),
+  },
+  (table) => ({
+    startAtIdx: index("entries_start_at_idx").on(table.startAt),
+    endAtIdx: index("entries_end_at_idx").on(table.endAt),
+    serverSeqIdx: index("entries_server_seq_idx").on(table.serverSeq),
+  })
+);
 
 // "Meine Geduld" aus dem Tagescheck ist pro Person, nicht geteilt - anders als
 // Folgsamkeit und Sharklevel/Energie, die weiterhin gemeinsam in `entries` liegen.
@@ -35,6 +57,7 @@ export const dailyPatience = sqliteTable(
     date: text("date").notNull(),
     geduld: integer("geduld").notNull(),
     updatedAt: integer("updated_at").notNull(),
+    serverSeq: integer("server_seq").notNull().default(0),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.userEmail, table.date] }),
