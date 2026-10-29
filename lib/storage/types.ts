@@ -9,6 +9,8 @@ export type EntryRecord = {
   endAt: number;
   updatedAt: number;
   deleted: boolean;
+  // Nur in der Queue: Grund, warum der Server den Eintrag abgelehnt hat. Er wird dann nicht erneut gesendet.
+  rejection?: string;
 };
 
 export type PatienceRecord = {

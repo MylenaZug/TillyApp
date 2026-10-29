@@ -121,6 +121,25 @@ export async function POST(request: NextRequest) {
         continue;
       }
       const { id, type, startAt, endAt, data, deleted } = shape.data;
+      if (deleted) {
+        // Loeschungen brauchen kein gueltiges data (auch ungueltige Eintraege muessen loeschbar sein).
+        const existing = tx.select().from(entries).where(eq(entries.id, id)).get();
+        if (existing?.deleted === 1) continue;
+        const asMs = (v: unknown, fallback: number) => (Number.isInteger(v) && (v as number) >= 0 ? (v as number) : fallback);
+        const tombstone = {
+          id,
+          type: existing?.type ?? type,
+          data: existing?.data ?? "{}",
+          startAt: existing?.startAt ?? asMs(startAt, 0),
+          endAt: existing?.endAt ?? asMs(endAt, 0),
+          updatedAt: Date.now(),
+          serverSeq: nextSeq(tx),
+          deleted: 1,
+        };
+        const { id: _tid, ...tombstoneSet } = tombstone;
+        tx.insert(entries).values(tombstone).onConflictDoUpdate({ target: entries.id, set: tombstoneSet }).run();
+        continue;
+      }
       const parsed = parseEntry({ type, startAt, endAt, data });
       if (!parsed.ok) {
         rejected.push({ kind: "entry", id, error: parsed.error });

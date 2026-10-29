@@ -169,12 +169,24 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
-  // Alles, was per Sync kommt (Eintraege, Einstellungen, Geduld der anderen), nach jedem Sync neu einlesen.
+  // Alles, was per Sync kommt (Eintraege, Einstellungen, Geduld der anderen), neu einlesen -
+  // aber nur, wenn ein Pull lokal wirklich etwas geaendert hat.
   useEffect(() => {
-    if (!sync.lastSyncAt) return;
+    if (sync.dataVersion === 0) return;
     void loadFromStore(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sync.lastSyncAt]);
+  }, [sync.dataVersion]);
+
+  // Toast, sobald neue Eintraege vom Server abgelehnt wurden.
+  const rejectedCount = Object.keys(sync.rejected).length;
+  const prevRejectedCount = useRef(0);
+  useEffect(() => {
+    if (rejectedCount > prevRejectedCount.current) {
+      showToast(`${rejectedCount} ${rejectedCount === 1 ? "Eintrag wurde" : "Einträge wurden"} vom Server abgelehnt – bitte im Verlauf prüfen`);
+    }
+    prevRejectedCount.current = rejectedCount;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rejectedCount]);
 
   function showToast(message: string) {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -422,7 +434,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           />
         )}
         {view === "history" && (
-          <HistoryView patience={allPatience} loadedFrom={loadedFrom} historyComplete={historyComplete} onLoadOlder={() => loadOlder()} onReachDate={(d) => void ensureLoaded(d)} entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
+          <HistoryView patience={allPatience} loadedFrom={loadedFrom} historyComplete={historyComplete} rejected={sync.rejected} onLoadOlder={() => loadOlder()} onReachDate={(d) => void ensureLoaded(d)} entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
         )}
         {view === "analysis" && <AnalysisView entries={entries} loadAll={loadAllEntries} onAddWeight={() => openAdd("weight")} />}
         {view === "gallery" && <GalleryView />}

@@ -2,7 +2,7 @@
 // gestuetzte) lokale Datenbank, aber mit gemocktem fetch statt echtem Server.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { localDb, resetLocalDb } from "@/lib/storage/local-db";
-import { getLastSyncAt, isClientOutdated, runSync } from "@/lib/storage/sync";
+import { getDataVersion, getLastSyncAt, isClientOutdated, runSync } from "@/lib/storage/sync";
 import { SYNC_PROTOCOL_HEADER, SYNC_PROTOCOL_VERSION } from "@/lib/tilly/protocol";
 
 const T = Date.UTC(2026, 2, 5, 9, 0);
@@ -64,6 +64,38 @@ describe("runSync", () => {
     });
     expect(await localDb.getQueue()).toEqual({ kv: [], entries: [], dailyPatience: [] });
     expect((await localDb.getMeta()).token).toBe(7);
+  });
+
+  it("behaelt abgelehnte Eintraege markiert in der Queue und sendet sie nicht erneut", async () => {
+    await localDb.enqueueEntry(entry("good"));
+    await localDb.enqueueEntry(entry("bad"));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(ok({ rejected: [{ kind: "entry", id: "bad", error: "ungueltig" }] }))
+      .mockResolvedValueOnce(ok(pull()));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await runSync();
+
+    expect((await localDb.getQueue()).entries).toEqual([]);
+    const rej = await localDb.listRejected();
+    expect(rej.map((e) => [e.id, e.rejection])).toEqual([["bad", "ungueltig"]]);
+
+    await localDb.enqueueEntry(entry("bad", 2));
+    expect((await localDb.getQueue()).entries.map((e) => e.id)).toEqual(["bad"]);
+    expect(await localDb.listRejected()).toEqual([]);
+  });
+
+  it("erhoeht dataVersion nur, wenn ein Pull etwas geaendert hat", async () => {
+    const v0 = getDataVersion();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ok(pull({ full: false, token: 6 }))));
+    await runSync();
+    expect(getDataVersion()).toBe(v0);
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ok(pull({ full: false, token: 7, entries: [{ ...entry("n1"), serverSeq: 7 }] }))));
+    await runSync();
+    expect(getDataVersion()).toBe(v0 + 1);
   });
 
   it("holt beim ersten Sync das Fenster und danach nur Aenderungen seit dem Token", async () => {

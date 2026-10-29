@@ -15,6 +15,7 @@ export function HistoryView({
   patience = [],
   loadedFrom = null,
   historyComplete = false,
+  rejected = {},
   onLoadOlder,
   onReachDate,
 }: {
@@ -25,6 +26,7 @@ export function HistoryView({
   patience?: PatienceRecord[];
   loadedFrom?: number | null;
   historyComplete?: boolean;
+  rejected?: Record<string, string>;
   onLoadOlder?: () => Promise<boolean>;
   onReachDate?: (date: Date) => void;
 }) {
@@ -72,7 +74,7 @@ export function HistoryView({
           <div className="absolute bottom-1 left-[7px] top-1 w-px bg-hairline" />
           {items.map((it) =>
             it.entry ? (
-              <TimelineRow key={it.key} entry={it.entry} onClick={() => onEdit(it.entry!)} />
+              <TimelineRow key={it.key} entry={it.entry} rejection={rejected[it.entry.id]} onClick={() => onEdit(it.entry!)} />
             ) : (
               <PatienceTimelineRow key={it.key} record={it.patience!} />
             ),

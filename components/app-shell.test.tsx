@@ -32,7 +32,7 @@ vi.mock("@/lib/storage/useSyncStatus", () => ({
   useSyncStatus: () => mockUseSyncStatus(),
 }));
 
-const syncInfo = (o: object) => ({ status: "synced", pending: 0, lastSyncAt: Date.now(), syncing: false, outdated: false, syncNow: vi.fn(), ...o });
+const syncInfo = (o: object) => ({ status: "synced", pending: 0, lastSyncAt: Date.now(), syncing: false, outdated: false, dataVersion: 0, rejected: {}, syncNow: vi.fn(), ...o });
 
 const { default: AppShell } = await import("@/components/app-shell");
 
@@ -102,6 +102,17 @@ describe("AppShell", () => {
     await user.click(screen.getByRole("button", { name: "Verlauf" }));
 
     expect(await screen.findByText("Keine Einträge in dieser Kategorie.")).toBeInTheDocument();
+  });
+
+  it("markiert abgelehnte Eintraege im Verlauf und zeigt einen Toast", async () => {
+    mockListEntries.mockResolvedValue([makeEntry({ id: "r1", type: "stress", data: { level: 2 } })]);
+    mockUseSyncStatus.mockReturnValue(syncInfo({ rejected: { r1: "ungueltig" } }));
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+    await waitFor(() => expect(mockListEntries).toHaveBeenCalled());
+    expect(await screen.findByText(/1 Eintrag wurde vom Server abgelehnt/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Verlauf" }));
+    expect(await screen.findByText(/Vom Server abgelehnt/)).toBeInTheDocument();
   });
 
   it("stuerzt bei einem Eintrag ohne typspezifische Felder nicht ab und zeigt keinen Platzhalter-Text", async () => {
@@ -252,7 +263,7 @@ describe("AppShell", () => {
   });
 
   it("laedt die Geduld nach einem Sync neu", async () => {
-    mockUseSyncStatus.mockReturnValue(syncInfo({ lastSyncAt: 1000 }));
+    mockUseSyncStatus.mockReturnValue(syncInfo({ dataVersion: 1 }));
     render(<AppShell userEmail="a@example.com" />);
     await waitFor(() => expect(mockListPatience.mock.calls.length).toBeGreaterThanOrEqual(2));
   });

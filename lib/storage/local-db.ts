@@ -92,7 +92,27 @@ export const localDb = {
   async getQueue(): Promise<PendingQueue> {
     const db = await open();
     const [kv, entries, patience] = await Promise.all([db.getAll("queueKv"), db.getAll("queueEntries"), db.getAll("queuePatience")]);
-    return { kv, entries, dailyPatience: patience.map(({ key: _key, ...rest }) => rest) };
+    // Abgelehnte Eintraege bleiben in der Queue, werden aber erst nach einer Korrektur wieder gesendet.
+    return { kv, entries: entries.filter((e) => !e.rejection), dailyPatience: patience.map(({ key: _key, ...rest }) => rest) };
+  },
+  async getQueuedEntry(id: string): Promise<EntryRecord | undefined> {
+    return (await open()).get("queueEntries", id);
+  },
+  async dequeueEntry(id: string) {
+    await (await open()).delete("queueEntries", id);
+  },
+  /** Markiert abgelehnte Eintraege - ausser sie wurden waehrend des Sendens erneut geaendert. */
+  async markRejected(items: { id: string; updatedAt: number; error: string }[]) {
+    const db = await open();
+    const tx = db.transaction("queueEntries", "readwrite");
+    for (const { id, updatedAt, error } of items) {
+      const row = await tx.store.get(id);
+      if (row && row.updatedAt === updatedAt) await tx.store.put({ ...row, rejection: error });
+    }
+    await tx.done;
+  },
+  async listRejected(): Promise<EntryRecord[]> {
+    return ((await (await open()).getAll("queueEntries")) as EntryRecord[]).filter((e) => e.rejection);
   },
   async getPendingCount(): Promise<number> {
     const db = await open();
@@ -163,7 +183,7 @@ export const localDb = {
    * Aenderungen werden nicht ueberschrieben. Bei einer Fenster-Antwort (`full`) werden alle
    * uebrigen lokalen Zeilen ersetzt.
    */
-  async applyPull(response: SyncPullResponse) {
+  async applyPull(response: SyncPullResponse): Promise<boolean> {
     const db = await open();
     const tx = db.transaction(["kv", "entries", "patience", "queueKv", "queueEntries", "queuePatience", "meta"], "readwrite");
     const [queuedKv, queuedEntries, queuedPatience] = await Promise.all([
@@ -213,10 +233,12 @@ export const localDb = {
       }
     }
 
+    const changed = response.full || response.kv.length > 0 || response.entries.length > 0 || response.dailyPatience.length > 0;
     await tx.objectStore("meta").put(response.token, "token");
     if (response.full && response.windowStart !== null) await tx.objectStore("meta").put(response.windowStart, "loadedFrom");
     if (response.full && response.earliestAt !== null) await tx.objectStore("meta").put(response.earliestAt, "earliestAt");
     await tx.done;
+    return changed;
   },
 };
 

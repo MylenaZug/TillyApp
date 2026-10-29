@@ -139,6 +139,13 @@ describe("POST /api/sync", () => {
     expect(sqlite.prepare("SELECT deleted, server_seq FROM entries").get()).toEqual({ deleted: 1, server_seq: 2 });
   });
 
+  it("akzeptiert Tombstones auch mit ungueltigem data", async () => {
+    await post({ entries: [stress("a", 1000)] });
+    const res = await post({ entries: [stress("a", 1000, { deleted: true, data: { level: "kaputt" } })] });
+    expect(res.status).toBe(200);
+    expect(sqlite.prepare("SELECT deleted FROM entries").get()).toEqual({ deleted: 1 });
+  });
+
   it("entfernt veraltete Felder aus data (date, ms, startedAt)", async () => {
     await post({ entries: [stress("a", 1000, { data: { level: 2, date: "2026-03-05", ms: 5, startedAt: "x" } })] });
     expect(JSON.parse((sqlite.prepare("SELECT data FROM entries").get() as { data: string }).data)).toEqual({ level: 2 });

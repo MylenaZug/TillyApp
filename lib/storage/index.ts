@@ -5,7 +5,12 @@ import { legacyRange } from "@/lib/tilly/legacy";
 import { SYNC_PROTOCOL_HEADER, SYNC_PROTOCOL_VERSION, type WireEntry } from "@/lib/tilly/protocol";
 import { parseEntry } from "@/lib/tilly/schemas";
 
-export { flushScheduledSync, getLastSyncAt, isClientOutdated, onStorageChange, runSync, setupAutoSync } from "./sync";
+/** Abgelehnte, noch nicht korrigierte Eintraege: id -> Fehlertext. */
+export async function getRejectedEntries(): Promise<Record<string, string>> {
+  return Object.fromEntries((await localDb.listRejected()).map((e) => [e.id, e.rejection!]));
+}
+
+export { flushScheduledSync, getDataVersion, getLastSyncAt, isClientOutdated, onStorageChange, runSync, setupAutoSync } from "./sync";
 
 function now() {
   return Date.now();
@@ -132,6 +137,12 @@ export async function deleteEntry(id: string) {
   const existing = await localDb.getEntry(id);
   if (!existing) return;
   await localDb.deleteEntry(id);
+  // Der Server hat einen abgelehnten Eintrag nie gespeichert: kein Tombstone noetig.
+  if ((await localDb.getQueuedEntry(id))?.rejection) {
+    await localDb.dequeueEntry(id);
+    notifyStorageChange();
+    return;
+  }
   await localDb.enqueueEntry({ ...existing, updatedAt: now(), deleted: true });
   void runSync();
 }

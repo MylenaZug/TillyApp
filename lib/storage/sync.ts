@@ -22,6 +22,12 @@ function notify() {
 
 export const notifyStorageChange = notify;
 
+// Zaehlt, wie oft sich der lokale Bestand durch einen Pull geaendert hat - die UI liest nur dann neu ein.
+let dataVersion = 0;
+export function getDataVersion() {
+  return dataVersion;
+}
+
 let clientOutdated = false;
 
 // true, sobald der Server die Protokollversion dieses Clients ablehnt (426): Die App muss neu
@@ -60,10 +66,18 @@ async function pushQueue() {
 
   const result: SyncPushResponse | undefined = await res.json?.().catch(() => undefined);
   // Abgelehnte Eintraege wuerden bei jedem Sync erneut abgelehnt - sie bleiben nicht in der Queue.
-  if (result?.rejected?.length) console.warn("Tilly: Server hat Aenderungen abgelehnt", result.rejected);
+  const rejected = result?.rejected ?? [];
+  if (rejected.length) console.warn("Tilly: Server hat Aenderungen abgelehnt", rejected);
+
+  // Abgelehnte Eintraege bleiben (markiert) in der Queue, damit sie korrigiert oder geloescht werden
+  // koennen. Einstellungen und Geduld haben triviale Schemas und werden wie bisher nur geloggt.
+  const rejectedEntries = new Map(rejected.filter((r) => r.kind === "entry").map((r) => [r.id, r.error]));
+  await localDb.markRejected(
+    queue.entries.filter((e) => rejectedEntries.has(e.id)).map((e) => ({ id: e.id, updatedAt: e.updatedAt, error: rejectedEntries.get(e.id)! }))
+  );
 
   // Erst nach erfolgreichem Push leeren, sonst gehen Aenderungen bei einem Fehler verloren.
-  await localDb.ackQueue(queue);
+  await localDb.ackQueue({ ...queue, entries: queue.entries.filter((e) => !rejectedEntries.has(e.id)) });
 }
 
 async function pullChanges(allowResync = true): Promise<void> {
@@ -82,7 +96,7 @@ async function pullChanges(allowResync = true): Promise<void> {
     return pullChanges(false);
   }
   if (!res.ok) throw new Error(`sync pull failed: ${res.status}`);
-  await localDb.applyPull((await res.json()) as SyncPullResponse);
+  if (await localDb.applyPull((await res.json()) as SyncPullResponse)) dataVersion++;
 }
 
 let syncing = false;

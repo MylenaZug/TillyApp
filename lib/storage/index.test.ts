@@ -114,6 +114,16 @@ describe("Eintraege", () => {
     expect(queue.entries[0]).toMatchObject({ id: entry.id, deleted: true });
   });
 
+  it("loescht einen abgelehnten Eintrag ohne Tombstone", async () => {
+    const entry = await saveEntry(undefined, "stress", { date: DATE, level: 2 });
+    await localDb.markRejected([{ id: entry.id, updatedAt: (await localDb.getQueuedEntry(entry.id))!.updatedAt, error: "x" }]);
+    await deleteEntry(entry.id);
+
+    expect(await localDb.getEntry(entry.id)).toBeUndefined();
+    expect(await localDb.getQueuedEntry(entry.id)).toBeUndefined();
+    expect(await localDb.listRejected()).toEqual([]);
+  });
+
   it("ignoriert das Loeschen einer lokal unbekannten id", async () => {
     await deleteEntry("unbekannte-id");
     expect((await localDb.getQueue()).entries).toEqual([]);

@@ -218,14 +218,14 @@ export function PatienceTimelineRow({ record }: { record: PatienceRecord }) {
   );
 }
 
-export function TimelineRow({ entry, onClick }: { entry: AnyEntry; onClick: () => void }) {
+export function TimelineRow({ entry, onClick, rejection }: { entry: AnyEntry; onClick: () => void; rejection?: string }) {
   const meta = catMeta(entry.type);
   return (
     <button onClick={onClick} className="relative flex w-full items-start gap-3 pb-4 text-left">
       <div className="absolute -left-4 top-0.5 flex h-4 w-4 items-center justify-center rounded-full" style={{ background: meta.hexSoft }}>
         <PawPrint size={9} style={{ color: meta.hex }} />
       </div>
-      <div className="flex-1 rounded-xl border border-hairline bg-card px-3 py-2.5">
+      <div className={`flex-1 rounded-xl border px-3 py-2.5 ${rejection ? "border-red-300 bg-red-50" : "border-hairline bg-card"}`}>
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-ink">{meta.label}</span>
           <span className="text-[11px] text-ink-soft">
@@ -235,6 +235,11 @@ export function TimelineRow({ entry, onClick }: { entry: AnyEntry; onClick: () =
           </span>
         </div>
         {entrySummary(entry) && <div className="mt-0.5 break-words text-[13px] text-ink-soft">{entrySummary(entry)}</div>}
+        {rejection && (
+          <div className="mt-1 break-words text-[12px] font-medium text-red-700">
+            Vom Server abgelehnt – bitte prüfen und erneut speichern oder löschen. ({rejection})
+          </div>
+        )}
       </div>
     </button>
   );
