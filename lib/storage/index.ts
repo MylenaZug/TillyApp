@@ -1,9 +1,10 @@
 import { localDb } from "./local-db";
 import { onStorageChange, runSync } from "./sync";
-import type { EntryRecord, KvMutation, PatienceRecord } from "./types";
-import { normalizeAloneData } from "@/lib/tilly/alone";
+import type { EntryRecord, KvRecord, PatienceRecord } from "./types";
+import { legacyRange } from "@/lib/tilly/legacy";
+import { parseEntry } from "@/lib/tilly/schemas";
 
-export { getLastSyncAt, onStorageChange, runSync, setupAutoSync } from "./sync";
+export { getLastSyncAt, isClientOutdated, onStorageChange, runSync, setupAutoSync } from "./sync";
 
 function now() {
   return Date.now();
@@ -13,103 +14,78 @@ function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-async function enqueue(mutate: (queue: Awaited<ReturnType<typeof localDb.getQueue>>) => void) {
-  const queue = await localDb.getQueue();
-  mutate(queue);
-  await localDb.setQueue(queue);
-  void runSync();
-}
-
 // ---- kv (Einstellungen: Trainingsarten, Futterarten, Notiz, Futterplan, ...) ----
 
 export async function getKv(key: string): Promise<string | null> {
-  const map = await localDb.getAllKv();
-  return map[key]?.value ?? null;
+  return (await localDb.getKv(key))?.value ?? null;
 }
 
 export async function setKv(key: string, value: string) {
-  const row: KvMutation = { key, value, updatedAt: now() };
+  const row: KvRecord = { key, value, updatedAt: now() };
   await localDb.putKv(row);
-  await enqueue((q) => {
-    q.kv = q.kv.filter((r) => r.key !== key);
-    q.kv.push(row);
-  });
+  await localDb.enqueueKv(row);
+  void runSync();
 }
 
-// ---- entries (Futter/Stuhlgang/Training/Stress/Symptom/Gewicht/Tierarzt/Kosten/Tagescheck) ----
+// ---- entries (Futter/Stuhlgang/Training/Stress/Symptom/Gewicht/Tierarzt/Kosten/Tagescheck/Alleine) ----
 
 export async function listEntries(): Promise<EntryRecord[]> {
-  const map = await localDb.getAllEntries();
-  return Object.values(map).filter((e) => !e.deleted);
+  return localDb.listEntries();
 }
 
-export async function saveEntry(id: string | undefined, type: string, data: unknown): Promise<EntryRecord> {
-  let serializedData = JSON.stringify(data);
-  let startDatetime: string | null = null;
-  let endDatetime: string | null = null;
-  if (type === "alone" && data && typeof data === "object") {
-    const normalized = normalizeAloneData(data as Record<string, unknown>);
-    serializedData = JSON.stringify(normalized.data);
-    startDatetime = normalized.startDatetime;
-    endDatetime = normalized.endDatetime;
-  }
+/**
+ * Speichert einen Eintrag lokal und reiht ihn fuer den Sync ein. Der Zeitraum kommt aus `range`
+ * oder (bis die Formulare ihn direkt liefern) aus data.date bzw. startDatetime/endDatetime.
+ */
+export async function saveEntry(
+  id: string | undefined,
+  type: string,
+  data: Record<string, unknown>,
+  range?: { startAt: number; endAt: number }
+): Promise<EntryRecord> {
+  const times = range ?? legacyRange(type, data);
+  const parsed = parseEntry({ type, startAt: times.startAt, endAt: times.endAt, data });
+  if (!parsed.ok) throw new Error(`Eintrag ungueltig: ${parsed.error}`);
   const row: EntryRecord = {
     id: id || uid(),
     type,
-    data: serializedData,
-    startDatetime,
-    endDatetime,
+    data: parsed.data as Record<string, unknown>,
+    startAt: parsed.startAt,
+    endAt: parsed.endAt,
     updatedAt: now(),
-    deleted: 0,
+    deleted: false,
   };
   await localDb.putEntry(row);
-  await enqueue((q) => {
-    q.entries = q.entries.filter((r) => r.id !== row.id);
-    q.entries.push(row);
-  });
+  await localDb.enqueueEntry(row);
+  void runSync();
   return row;
 }
 
 export async function deleteEntry(id: string) {
-  const map = await localDb.getAllEntries();
-  const existing = map[id];
-  const row: EntryRecord = {
-    id,
-    type: existing?.type || "",
-    data: existing?.data || "{}",
-    startDatetime: existing?.startDatetime,
-    endDatetime: existing?.endDatetime,
-    updatedAt: now(),
-    deleted: 1,
-  };
-  await localDb.putEntry(row);
-  await enqueue((q) => {
-    q.entries = q.entries.filter((r) => r.id !== id);
-    q.entries.push(row);
-  });
+  const existing = await localDb.getEntry(id);
+  if (!existing) return;
+  await localDb.deleteEntry(id);
+  await localDb.enqueueEntry({ ...existing, updatedAt: now(), deleted: true });
+  void runSync();
 }
 
 // ---- Geduld pro Google-Account (nicht geteilt, anders als Folgsamkeit/Sharklevel in entries) ----
 
 export async function getPatience(userEmail: string, date: string): Promise<number> {
-  const map = await localDb.getAllPatience();
-  return map[`${userEmail}:${date}`]?.geduld ?? 0;
+  return (await localDb.getPatience(userEmail, date))?.geduld ?? 0;
 }
 
 export async function setMyPatience(userEmail: string, date: string, geduld: number) {
   const row: PatienceRecord = { userEmail, date, geduld, updatedAt: now() };
   await localDb.putPatience(row);
-  await enqueue((q) => {
-    q.dailyPatience = q.dailyPatience.filter((r) => r.date !== date);
-    q.dailyPatience.push({ date, geduld, updatedAt: row.updatedAt });
-  });
+  await localDb.enqueuePatience(row);
+  void runSync();
 }
 
 export async function listPatience(): Promise<PatienceRecord[]> {
-  return Object.values(await localDb.getAllPatience());
+  return localDb.listPatience();
 }
 
 export async function getPendingCount(): Promise<number> {
-  const q = await localDb.getQueue();
-  return q.kv.length + q.entries.length + q.dailyPatience.length;
+  return localDb.getPendingCount();
 }

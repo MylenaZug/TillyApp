@@ -28,12 +28,12 @@ vi.mock("@/lib/storage/useSyncStatus", () => ({
   useSyncStatus: () => mockUseSyncStatus(),
 }));
 
-const syncInfo = (o: object) => ({ status: "synced", pending: 0, lastSyncAt: Date.now(), syncing: false, syncNow: vi.fn(), ...o });
+const syncInfo = (o: object) => ({ status: "synced", pending: 0, lastSyncAt: Date.now(), syncing: false, outdated: false, syncNow: vi.fn(), ...o });
 
 const { default: AppShell } = await import("@/components/app-shell");
 
 function makeEntry(overrides: Partial<EntryRecord>): EntryRecord {
-  return { id: "1", type: "food", data: "{}", updatedAt: Date.now(), deleted: 0, ...overrides };
+  return { id: "1", type: "food", data: {}, startAt: Date.now(), endAt: Date.now(), updatedAt: Date.now(), deleted: false, ...overrides };
 }
 
 beforeEach(() => {
@@ -100,8 +100,8 @@ describe("AppShell", () => {
     expect(await screen.findByText("Keine Einträge in dieser Kategorie.")).toBeInTheDocument();
   });
 
-  it("stuerzt bei fehlerhaftem JSON in einem Eintrag nicht ab und zeigt keinen Platzhalter-Text", async () => {
-    mockListEntries.mockResolvedValue([makeEntry({ id: "broken", type: "food", data: "{not-json" })]);
+  it("stuerzt bei einem Eintrag ohne typspezifische Felder nicht ab und zeigt keinen Platzhalter-Text", async () => {
+    mockListEntries.mockResolvedValue([makeEntry({ id: "broken", type: "food", data: {} })]);
     const user = userEvent.setup();
 
     render(<AppShell userEmail="a@example.com" />);

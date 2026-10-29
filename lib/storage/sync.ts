@@ -1,5 +1,5 @@
 import { localDb } from "./local-db";
-import type { SyncResponse } from "./types";
+import { SYNC_PROTOCOL_HEADER, SYNC_PROTOCOL_VERSION, type SyncPullResponse, type SyncPushResponse } from "@/lib/tilly/protocol";
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -20,41 +20,74 @@ function notify() {
   listeners.forEach((l) => l());
 }
 
+let clientOutdated = false;
+
+// true, sobald der Server die Protokollversion dieses Clients ablehnt (426): Die App muss neu
+// geladen werden, bis dahin wird nicht mehr synchronisiert.
+export function isClientOutdated() {
+  return clientOutdated;
+}
+
+const PROTOCOL_HEADERS = { [SYNC_PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION) };
+
+function markOutdated() {
+  clientOutdated = true;
+  notify();
+}
+
 async function pushQueue() {
   const queue = await localDb.getQueue();
-  const hasChanges = queue.kv.length || queue.entries.length || queue.dailyPatience.length;
-  if (!hasChanges) return;
+  if (!queue.kv.length && !queue.entries.length && !queue.dailyPatience.length) return;
 
   const res = await fetch("/api/sync", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...PROTOCOL_HEADERS },
     credentials: "include",
-    body: JSON.stringify(queue),
+    // updatedAt vergibt der Server; die Geduld gehoert immer dem eingeloggten Account.
+    body: JSON.stringify({
+      kv: queue.kv.map(({ key, value }) => ({ key, value })),
+      entries: queue.entries.map(({ id, type, startAt, endAt, data, deleted }) => ({ id, type, startAt, endAt, data, deleted })),
+      dailyPatience: queue.dailyPatience.map(({ date, geduld }) => ({ date, geduld })),
+    }),
   });
+  if (res.status === 426) {
+    markOutdated();
+    throw new Error("sync push failed: client outdated");
+  }
   if (!res.ok) throw new Error(`sync push failed: ${res.status}`);
 
+  const result: SyncPushResponse | undefined = await res.json?.().catch(() => undefined);
+  // Abgelehnte Eintraege wuerden bei jedem Sync erneut abgelehnt - sie bleiben nicht in der Queue.
+  if (result?.rejected?.length) console.warn("Tilly: Server hat Aenderungen abgelehnt", result.rejected);
+
   // Erst nach erfolgreichem Push leeren, sonst gehen Aenderungen bei einem Fehler verloren.
-  await localDb.setQueue({ kv: [], entries: [], dailyPatience: [] });
+  await localDb.ackQueue(queue);
 }
 
-async function pullChanges() {
-  const meta = await localDb.getMeta();
-  const res = await fetch(`/api/sync?since=${meta.lastSyncedAt}`, { credentials: "include" });
+async function pullChanges(allowResync = true): Promise<void> {
+  const { token } = await localDb.getMeta();
+  const res = await fetch(token === null ? "/api/sync" : `/api/sync?token=${token}`, {
+    credentials: "include",
+    headers: PROTOCOL_HEADERS,
+  });
+  if (res.status === 426) {
+    markOutdated();
+    throw new Error("sync pull failed: client outdated");
+  }
+  if (res.status === 409 && allowResync) {
+    // Token unbekannt (z.B. Server auf Backup zurueckgesetzt): Fenster neu laden.
+    await localDb.resetSyncState();
+    return pullChanges(false);
+  }
   if (!res.ok) throw new Error(`sync pull failed: ${res.status}`);
-  const data: SyncResponse = await res.json();
-
-  for (const row of data.kv) await localDb.putKv(row);
-  for (const row of data.entries) await localDb.putEntry(row);
-  for (const row of data.dailyPatience) await localDb.putPatience(row);
-
-  await localDb.setMeta({ lastSyncedAt: data.serverTime });
+  await localDb.applyPull((await res.json()) as SyncPullResponse);
 }
 
 let syncing = false;
 
 export async function runSync() {
   if (typeof navigator !== "undefined" && !navigator.onLine) return;
-  if (syncing) return;
+  if (syncing || clientOutdated) return;
   syncing = true;
   try {
     await pushQueue();

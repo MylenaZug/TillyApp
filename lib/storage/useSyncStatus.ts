@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getLastSyncAt, getPendingCount, onStorageChange, runSync, setupAutoSync } from "@/lib/storage";
+import { getLastSyncAt, getPendingCount, isClientOutdated, onStorageChange, runSync, setupAutoSync } from "@/lib/storage";
 
 export type SyncStatus = "offline" | "pending" | "synced";
 
@@ -10,6 +10,8 @@ export type SyncInfo = {
   pending: number;
   lastSyncAt: number | null;
   syncing: boolean;
+  // Der Server lehnt diese App-Version ab (426): Neu laden erforderlich.
+  outdated: boolean;
   syncNow: () => Promise<void>;
 };
 
@@ -18,11 +20,13 @@ export function useSyncStatus(): SyncInfo {
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(getLastSyncAt());
   const [syncing, setSyncing] = useState(false);
   const [online, setOnline] = useState(true);
+  const [outdated, setOutdated] = useState(isClientOutdated());
 
   useEffect(() => {
     const refreshPending = () => {
       void getPendingCount().then(setPending);
       setLastSyncAt(getLastSyncAt());
+      setOutdated(isClientOutdated());
     };
     refreshPending();
     const unsubscribe = onStorageChange(refreshPending);
@@ -56,5 +60,5 @@ export function useSyncStatus(): SyncInfo {
   }, []);
 
   const status: SyncStatus = !online ? "offline" : pending > 0 ? "pending" : "synced";
-  return { status, pending, lastSyncAt, syncing, syncNow };
+  return { status, pending, lastSyncAt, syncing, outdated, syncNow };
 }

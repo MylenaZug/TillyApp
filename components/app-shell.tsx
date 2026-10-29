@@ -17,7 +17,7 @@ import { SyncButton } from "@/components/tilly/SyncButton";
 import type { EntryRecord, PatienceRecord } from "@/lib/storage/types";
 import { ADDABLE_CATEGORIES, SYMPTOM_CATEGORIES, catMeta } from "@/lib/tilly/constants";
 import { dateKey, formatDuration, nowLocalISO, tillyAge, weightFeedback } from "@/lib/tilly/helpers";
-import { aloneDurationMs, MIN_ALONE_DURATION_MS, normalizeAloneData, roundToMinute } from "@/lib/tilly/alone";
+import { aloneDurationMs, MIN_ALONE_DURATION_MS, roundToMinute } from "@/lib/tilly/alone";
 import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, PawTrailLoader, PrimaryButton } from "@/components/tilly/ui";
 import { HomeView } from "@/components/tilly/HomeView";
@@ -29,30 +29,17 @@ import { EntryForm } from "@/components/tilly/EntryForm";
 
 const DEFAULT_TRAINING_TYPES = ["Sitz", "Leinenführigkeit", "Rückruf"];
 
+// Die UI arbeitet noch mit ISO-Strings (date, startDatetime, endDatetime); gespeichert sind Epoch-ms.
 function parseEntryRecord(record: EntryRecord): AnyEntry {
-  try {
-    const data = JSON.parse(record.data) as Record<string, unknown>;
-    if (record.type === "alone") {
-      const normalized = normalizeAloneData(data, record.startDatetime, record.endDatetime);
-      return {
-        id: record.id,
-        type: record.type as CategoryId,
-        updatedAt: record.updatedAt,
-        ...normalized.data,
-        date: normalized.startDatetime ?? new Date(record.updatedAt).toISOString(),
-        startDatetime: normalized.startDatetime ?? undefined,
-        endDatetime: normalized.endDatetime ?? undefined,
-      } as AnyEntry;
-    }
-    return { id: record.id, type: record.type as CategoryId, updatedAt: record.updatedAt, ...data } as AnyEntry;
-  } catch {
-    return {
-      id: record.id,
-      type: record.type as CategoryId,
-      updatedAt: record.updatedAt,
-      date: new Date(record.updatedAt).toISOString(),
-    } as AnyEntry;
-  }
+  return {
+    ...record.data,
+    id: record.id,
+    type: record.type as CategoryId,
+    updatedAt: record.updatedAt,
+    date: new Date(record.startAt).toISOString(),
+    startDatetime: new Date(record.startAt).toISOString(),
+    endDatetime: new Date(record.endAt).toISOString(),
+  } as AnyEntry;
 }
 
 function NavButton({

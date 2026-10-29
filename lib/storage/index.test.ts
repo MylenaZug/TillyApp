@@ -1,7 +1,6 @@
-// Storage-Layer laeuft komplett auf idb-keyval; fake-indexeddb (via vitest.setup.ts)
+// Storage-Layer laeuft auf IndexedDB-Objekt-Stores (idb); fake-indexeddb (via vitest.setup.ts)
 // stellt eine In-Memory-IndexedDB fuer diese Tests bereit.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clear } from "idb-keyval";
 
 vi.mock("@/lib/storage/sync", () => ({
   runSync: vi.fn(),
@@ -19,11 +18,13 @@ import {
   setKv,
   setMyPatience,
 } from "@/lib/storage";
-import { localDb } from "@/lib/storage/local-db";
+import { localDb, resetLocalDb } from "@/lib/storage/local-db";
 
 beforeEach(async () => {
-  await clear();
+  await resetLocalDb();
 });
+
+const DATE = "2026-03-05T10:30:00.000Z";
 
 describe("kv-Einstellungen", () => {
   it("liefert null fuer einen unbekannten Schluessel", async () => {
@@ -49,7 +50,7 @@ describe("kv-Einstellungen", () => {
 
 describe("Eintraege", () => {
   it("erzeugt eine neue id, wenn keine uebergeben wird", async () => {
-    const entry = await saveEntry(undefined, "food", { note: "Napf" });
+    const entry = await saveEntry(undefined, "food", { food: "Nass", date: DATE, note: "Napf" });
 
     expect(entry.id).toBeTruthy();
     const listed = await listEntries();
@@ -58,39 +59,58 @@ describe("Eintraege", () => {
   });
 
   it("aktualisiert einen bestehenden Eintrag statt ihn zu duplizieren", async () => {
-    const first = await saveEntry(undefined, "food", { note: "Napf" });
-    await saveEntry(first.id, "food", { note: "Napf, aktualisiert" });
+    const first = await saveEntry(undefined, "food", { food: "Nass", date: DATE, note: "Napf" });
+    await saveEntry(first.id, "food", { food: "Nass", date: DATE, note: "Napf, aktualisiert" });
 
     const listed = await listEntries();
     expect(listed).toHaveLength(1);
-    expect(JSON.parse(listed[0].data).note).toBe("Napf, aktualisiert");
+    expect(listed[0].data.note).toBe("Napf, aktualisiert");
   });
 
-  it("speichert Alleine-Zeitpunkte getrennt von den JSON-Daten", async () => {
+  it("speichert Alleine-Zeitpunkte als Epoch-ms (volle Minuten) und nur die Notiz in data", async () => {
     const entry = await saveEntry(undefined, "alone", {
-      date: "2026-03-05T10:30:00.000Z",
       startDatetime: "2026-03-05T09:00:20.000Z",
       endDatetime: "2026-03-05T10:30:20.000Z",
-      ms: 5_400_000,
+      note: "x",
     });
 
-    expect(entry.startDatetime).toBe("2026-03-05T09:00:00.000Z");
-    expect(entry.endDatetime).toBe("2026-03-05T10:30:00.000Z");
-    expect(JSON.parse(entry.data)).toEqual({});
+    expect(entry.startAt).toBe(Date.UTC(2026, 2, 5, 9, 0));
+    expect(entry.endAt).toBe(Date.UTC(2026, 2, 5, 10, 30));
+    expect(entry.data).toEqual({ note: "x" });
+  });
+
+  it("speichert Punkt-Ereignisse mit end = start und ohne date in data", async () => {
+    const entry = await saveEntry(undefined, "stress", { date: DATE, level: 2 });
+    expect(entry.startAt).toBe(Date.parse(DATE));
+    expect(entry.endAt).toBe(entry.startAt);
+    expect(entry.data).toEqual({ level: 2 });
+  });
+
+  it("lehnt ungueltige Eintraege ab", async () => {
+    await expect(saveEntry(undefined, "stress", { level: 2 })).rejects.toThrow("Eintrag ungueltig");
+    await expect(saveEntry(undefined, "stress", { date: DATE, level: "x" })).rejects.toThrow("data.level");
   });
 
   it("blendet weich geloeschte Eintraege in listEntries aus", async () => {
-    const entry = await saveEntry(undefined, "training", { activity: "Sitz" });
+    const entry = await saveEntry(undefined, "training", { date: DATE, activity: "Sitz", dogStars: 3, trainerStars: 3 });
     await deleteEntry(entry.id);
 
     expect(await listEntries()).toHaveLength(0);
   });
 
-  it("legt auch fuer eine nie lokal gespeicherte id einen Tombstone an", async () => {
-    await deleteEntry("unbekannte-id");
+  it("entfernt einen Eintrag lokal und reiht einen Tombstone fuer den Server ein", async () => {
+    const entry = await saveEntry(undefined, "stress", { date: DATE, level: 2 });
+    await deleteEntry(entry.id);
 
-    const map = await localDb.getAllEntries();
-    expect(map["unbekannte-id"]).toMatchObject({ deleted: 1, type: "", data: "{}" });
+    expect(await localDb.getEntry(entry.id)).toBeUndefined();
+    const queue = await localDb.getQueue();
+    expect(queue.entries).toHaveLength(1);
+    expect(queue.entries[0]).toMatchObject({ id: entry.id, deleted: true });
+  });
+
+  it("ignoriert das Loeschen einer lokal unbekannten id", async () => {
+    await deleteEntry("unbekannte-id");
+    expect((await localDb.getQueue()).entries).toEqual([]);
   });
 });
 
@@ -117,7 +137,7 @@ describe("Geduld pro Person", () => {
 describe("ausstehende Aenderungen", () => {
   it("zaehlt kv-, Eintrags- und Geduld-Mutationen zusammen", async () => {
     await setKv("tilly:note", "x");
-    await saveEntry(undefined, "food", {});
+    await saveEntry(undefined, "food", { food: "Nass", date: DATE });
     await setMyPatience("a@example.com", "2026-09-18", 3);
 
     expect(await getPendingCount()).toBe(3);
