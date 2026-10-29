@@ -18,17 +18,23 @@ synchronisiert Einträge automatisch, sobald wieder eine Verbindung zum Server b
   Zugriff ist auf eine feste Allow-List von Google-Konten beschränkt
   (`ALLOWED_GOOGLE_EMAILS`). Außerhalb von Production loggt `auth.ts` automatisch als
   `DEV_USER_EMAIL` ein, ganz ohne Google-OAuth.
-- **Offline-Sync:** Lokale Persistenz per IndexedDB (`idb-keyval`, siehe `lib/storage/`),
-  optimistische Updates und eine Mutation-Queue, die bei bestehender Verbindung mit dem
-  Server abgeglichen wird (Last-Write-Wins pro Eintrag anhand eines `updatedAt`-Zeitstempels).
+- **Offline-Sync:** Lokale Persistenz per IndexedDB (`idb`, siehe `lib/storage/`),
+  optimistische Updates und eine Mutation-Queue. Der Server vergibt beim Speichern
+  `updatedAt` und eine fortlaufende `server_seq` (last push wins). Der Client merkt sich
+  die letzte `server_seq` als Token und holt danach nur noch das Delta (inkl. gelöschter
+  Einträge). Der erste Sync lädt nur die letzten 30 Tage; ältere Einträge werden im Verlauf
+  bzw. Kalender nachgeladen, die Auswertung „Gesamt“ holt alles direkt vom Server.
+  Client und Server prüfen `SYNC_PROTOCOL_VERSION` (Header `x-tilly-protocol`); ein
+  veralteter Client bekommt 426 und muss die App neu laden.
 - **PWA:** installierbar, offline nutzbar (`@ducanh2912/next-pwa`); der Service Worker
   cacht nur Assets, API-Aufrufe laufen über die eigene Sync-Engine.
 
 ## Datenmodell (Kurzüberblick)
 
 - `entries` – ein Datensatz pro Aktivität (Futter, Stuhlgang, Training, Stress,
-  Auffälligkeit, Gewicht, Tierarzt, Kosten, Tagescheck); typspezifische Felder liegen als
-  JSON in `data`.
+  Auffälligkeit, Gewicht, Tierarzt, Kosten, Tagescheck, Alleinsein); jeder Eintrag hat
+  `start_at`/`end_at` (Epoch-ms, bei Punktereignissen gleich), typspezifische Felder liegen
+  als JSON in `data` und werden per Zod (`lib/tilly/schemas.ts`) validiert.
 - `kvStore` – kleinere, seltener geänderte Einstellungen (Trainingsarten, Futterarten,
   Übungsliste, allgemeine Notiz, Futterplan).
 - `dailyPatience` – der "Geduld"-Wert des Tageschecks, getrennt pro Person (Google-Konto)
@@ -84,3 +90,15 @@ funktioniert lokal trotzdem alles über den automatischen Dev-Login (`DEV_USER_E
 ## Deployment
 
 Für den produktiven Betrieb auf dem eigenen Ubuntu-Server siehe [SERVER_SETUP.md](SERVER_SETUP.md).
+
+## Rollout-Checkliste (Update auf Sync-Protokoll 3)
+
+1. Alle Clients synchronisieren lassen und nicht mehr benutzen.
+2. `npm run backup`; Anzahl der Einträge pro Typ notieren.
+3. Prüfen, dass `TZ=Europe/Berlin` in der Server-Umgebung gesetzt ist.
+4. Neuen Code deployen und Server starten – Migrationen laufen automatisch (mit
+   `.pre-migrate-*.bak`-Backup). Bei nicht umwandelbaren Einträgen bricht die Migration mit
+   ID-Liste ab und rollt zurück.
+5. Danach Anzahl pro Typ vergleichen und prüfen, dass kein `start_at = 0` übrig ist:
+   `sqlite3 tilly.db "select count(*) from entries where start_at = 0"`
+6. Clients neu installieren; alle Daten kommen initial vom Server.
