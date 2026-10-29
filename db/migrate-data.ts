@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { legacyRange } from "../lib/tilly/legacy";
+import { legacyRange, normalizeLegacyData } from "../lib/tilly/legacy";
 import { parseEntry } from "../lib/tilly/schemas";
 
 type LegacyRow = { id: string; type: string; data: string; start_at: number; end_at: number };
@@ -37,7 +37,7 @@ export function migrateData(sqlite: Database.Database): void {
         continue;
       }
       const { startAt, endAt } = legacyRange(row.type, data);
-      const parsed = parseEntry({ type: row.type, startAt, endAt, data });
+      const parsed = parseEntry({ type: row.type, startAt, endAt, data: normalizeLegacyData(row.type, data) });
       if (!parsed.ok) {
         failures.push({ id: row.id, type: row.type, error: parsed.error });
         continue;

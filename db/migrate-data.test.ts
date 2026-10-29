@@ -42,6 +42,12 @@ describe("migrateData", () => {
     expect(JSON.parse(r.data as string)).toEqual({ note: "x" });
   });
 
+  it("wandelt consistency als String in ein Array mit aktuellen Bezeichnungen um", () => {
+    insert("s", "stool", { date: "2026-09-19T10:55:00.000Z", note: "", consistency: "Fest", color: "Braun", flags: [], stoolAmount: "Mittel" });
+    migrateData(db);
+    expect(JSON.parse(row("s").data as string).consistency).toEqual(["Feste Wurst"]);
+  });
+
   it("vergibt server_seq nach updated_at über alle Tabellen und ist idempotent", () => {
     insert("b", "stress", { date: "2026-03-05T10:00:00.000Z", level: 1 }, 20);
     insert("a", "stress", { date: "2026-03-05T10:00:00.000Z", level: 1 }, 10);
