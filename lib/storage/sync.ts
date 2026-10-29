@@ -138,8 +138,14 @@ export function flushScheduledSync() {
   void runSync();
 }
 
+// Schuetzt die IndexedDB davor, bei Speichermangel vom Browser geraeumt zu werden.
+function requestPersistentStorage() {
+  void navigator.storage?.persist?.().catch(() => {});
+}
+
 export function setupAutoSync() {
   if (typeof window === "undefined") return () => {};
+  requestPersistentStorage();
   const trigger = () => void runSync();
   window.addEventListener("online", trigger);
   window.addEventListener("focus", trigger);

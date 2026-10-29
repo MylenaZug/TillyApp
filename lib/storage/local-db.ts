@@ -174,7 +174,8 @@ export const localDb = {
       const current = (await tx.objectStore("meta").get("loadedFrom")) as number | undefined;
       if (current === undefined || loadedFrom < current) await tx.objectStore("meta").put(loadedFrom, "loadedFrom");
     }
-    if (earliestAt != null) await tx.objectStore("meta").put(earliestAt, "earliestAt");
+    if (earliestAt === null) await tx.objectStore("meta").delete("earliestAt");
+    else if (earliestAt !== undefined) await tx.objectStore("meta").put(earliestAt, "earliestAt");
     await tx.done;
   },
 
@@ -236,7 +237,10 @@ export const localDb = {
     const changed = response.full || response.kv.length > 0 || response.entries.length > 0 || response.dailyPatience.length > 0;
     await tx.objectStore("meta").put(response.token, "token");
     if (response.full && response.windowStart !== null) await tx.objectStore("meta").put(response.windowStart, "loadedFrom");
-    if (response.full && response.earliestAt !== null) await tx.objectStore("meta").put(response.earliestAt, "earliestAt");
+    if (response.full) {
+      if (response.earliestAt === null) await tx.objectStore("meta").delete("earliestAt");
+      else await tx.objectStore("meta").put(response.earliestAt, "earliestAt");
+    }
     await tx.done;
     return changed;
   },

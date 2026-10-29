@@ -87,6 +87,16 @@ describe("runSync", () => {
     expect(await localDb.listRejected()).toEqual([]);
   });
 
+  it("setzt earliestAt zurueck, wenn der Server bei einem vollen Sync keinen Eintrag mehr kennt", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ok(pull({ earliestAt: T }))));
+    await runSync();
+    expect((await localDb.getMeta()).earliestAt).toBe(T);
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ok(pull({ earliestAt: null }))));
+    await runSync();
+    expect((await localDb.getMeta()).earliestAt).toBeNull();
+  });
+
   it("erhoeht dataVersion nur, wenn ein Pull etwas geaendert hat", async () => {
     const v0 = getDataVersion();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ok(pull({ full: false, token: 6 }))));
