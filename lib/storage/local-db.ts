@@ -141,6 +141,7 @@ export const localDb = {
     const db = await open();
     return {
       token: ((await db.get("meta", "token")) as number | undefined) ?? null,
+      syncRevision: ((await db.get("meta", "syncRevision")) as number | undefined) ?? 0,
       loadedFrom: ((await db.get("meta", "loadedFrom")) as number | undefined) ?? null,
       earliestAt: ((await db.get("meta", "earliestAt")) as number | undefined) ?? null,
     };
@@ -154,9 +155,14 @@ export const localDb = {
    * Speichert nachgeladene Eintraege (ohne noch nicht gesendete lokale Aenderungen zu ueberschreiben)
    * und setzt optional `loadedFrom` nach vorne.
    */
-  async putLoadedEntries(rows: WireEntry[], loadedFrom?: number, earliestAt?: number | null) {
+  async putLoadedEntries(rows: WireEntry[], loadedFrom?: number, earliestAt?: number | null, expectedSyncRevision?: number): Promise<boolean> {
     const db = await open();
     const tx = db.transaction(["entries", "queueEntries", "meta"], "readwrite");
+    const currentRevision = ((await tx.objectStore("meta").get("syncRevision")) as number | undefined) ?? 0;
+    if (expectedSyncRevision !== undefined && currentRevision !== expectedSyncRevision) {
+      await tx.done;
+      return false;
+    }
     const queued = new Set(await tx.objectStore("queueEntries").getAllKeys());
     for (const row of rows) {
       if (queued.has(row.id) || row.deleted) continue;
@@ -177,6 +183,7 @@ export const localDb = {
     if (earliestAt === null) await tx.objectStore("meta").delete("earliestAt");
     else if (earliestAt !== undefined) await tx.objectStore("meta").put(earliestAt, "earliestAt");
     await tx.done;
+    return true;
   },
 
   /**
@@ -236,6 +243,8 @@ export const localDb = {
 
     const changed = response.full || response.kv.length > 0 || response.entries.length > 0 || response.dailyPatience.length > 0;
     await tx.objectStore("meta").put(response.token, "token");
+    const revision = ((await tx.objectStore("meta").get("syncRevision")) as number | undefined) ?? 0;
+    await tx.objectStore("meta").put(revision + 1, "syncRevision");
     if (response.full && response.windowStart !== null) await tx.objectStore("meta").put(response.windowStart, "loadedFrom");
     if (response.full) {
       if (response.earliestAt === null) await tx.objectStore("meta").delete("earliestAt");

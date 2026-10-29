@@ -62,7 +62,16 @@ export function EntryForm({
   onCancel: () => void;
 }) {
   const meta = catMeta(categoryId);
-  const [date, setDate] = useState(existing ? existing.startAt : nowMinute());
+  // Datum und Uhrzeit roh halten: Wird ein Feld geleert, bleibt das andere erhalten und das
+  // Formular laesst sich weiter bearbeiten; gespeichert wird nur bei gueltiger Kombination.
+  const initialAt = existing ? existing.startAt : nowMinute();
+  const [dayInput, setDayInput] = useState(toLocalDateValue(initialAt));
+  const [timeInput, setTimeInput] = useState(toLocalTimeValue(initialAt));
+  const date = !dayInput
+    ? Number.NaN
+    : CATEGORIES_WITH_TIME.includes(categoryId)
+      ? combineLocalDateTime(dayInput, timeInput)
+      : dateOnlyToMs(dayInput);
 
   const [consistency, setConsistency] = useState<string[]>(existing ? stoolConsistency(existing) : []);
   const [stoolAmount, setStoolAmount] = useState(existing?.stoolAmount || STOOL_AMOUNTS[1]);
@@ -122,7 +131,8 @@ export function EntryForm({
   const [note, setNote] = useState(existing?.note || "");
 
   const canSave =
-    (categoryId === "stool" && consistency.length > 0) ||
+    (categoryId === "alone" || Number.isFinite(date)) &&
+    ((categoryId === "stool" && consistency.length > 0) ||
     (categoryId === "training" && activity.trim().length > 0) ||
     (categoryId === "weight" && kg.trim().length > 0 && !Number.isNaN(Number(kg))) ||
     (categoryId === "food" && food.trim().length > 0) ||
@@ -131,7 +141,7 @@ export function EntryForm({
     (categoryId === "stress" && level > 0) ||
     (categoryId === "kosten" && kostenAmount.trim().length > 0 && !Number.isNaN(Number(kostenAmount))) ||
     categoryId === "tagescheck" ||
-    (categoryId === "alone" && aloneMs >= MIN_ALONE_DURATION_MS);
+    (categoryId === "alone" && aloneMs >= MIN_ALONE_DURATION_MS));
 
   const handleSave = () => {
     const base = { note: note.trim() };
@@ -223,17 +233,17 @@ export function EntryForm({
             <div className="flex gap-2">
               <TextInput
                 type="date"
-                value={toLocalDateValue(date)}
-                onChange={(e) => setDate(combineLocalDateTime(e.target.value, toLocalTimeValue(date)))}
+                value={dayInput}
+                onChange={(e) => setDayInput(e.target.value)}
               />
               <TextInput
                 type="time"
-                value={toLocalTimeValue(date)}
-                onChange={(e) => setDate(combineLocalDateTime(toLocalDateValue(date), e.target.value))}
+                value={timeInput}
+                onChange={(e) => setTimeInput(e.target.value)}
               />
             </div>
           ) : (
-            <TextInput type="date" value={toLocalDateValue(date)} onChange={(e) => setDate(dateOnlyToMs(e.target.value))} />
+            <TextInput type="date" value={dayInput} onChange={(e) => setDayInput(e.target.value)} />
           )}
         </div>
         )}

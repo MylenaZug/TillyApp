@@ -69,8 +69,8 @@ async function pushQueue(): Promise<number> {
   }
   if (!res.ok) throw new Error(`sync push failed: ${res.status}`);
 
-  const result: SyncPushResponse | undefined = await res.json?.().catch(() => undefined);
-  // Abgelehnte Eintraege wuerden bei jedem Sync erneut abgelehnt - sie bleiben nicht in der Queue.
+  // Ist die Antwort nicht lesbar, ist unbekannt, was angenommen wurde: abbrechen, die Queue bleibt.
+  const result = (await res.json()) as SyncPushResponse;
   const rejected = result?.rejected ?? [];
   if (rejected.length) console.warn("Tilly: Server hat Aenderungen abgelehnt", rejected);
 

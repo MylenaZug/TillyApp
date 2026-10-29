@@ -119,9 +119,11 @@ export function AnalysisView({
     return () => {
       cancelled = true;
     };
-  }, [range, loadAll]);
+    // localEntries: neue, geaenderte oder geloeschte Eintraege machen den Server-Stand ungueltig.
+  }, [range, loadAll, localEntries]);
 
-  const entries = range === "all" && allEntries ? allEntries : localEntries;
+  // Nach einem Fehler gilt wieder der lokale Bestand, nicht ein veralteter Server-Stand.
+  const entries = range === "all" && allEntries && allState !== "error" ? allEntries : localEntries;
 
   const inRange = (e: AnyEntry) => range === "all" || daysAgo(e.startAt) <= range;
   const stoolEntries = entries.filter((e) => e.type === "stool" && inRange(e));

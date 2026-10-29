@@ -85,11 +85,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * ganzen Zeitraum zusaetzlich abgelegt (Fenster bleibt unveraendert).
  */
 export async function loadEntries(options: { from: number; type?: string }): Promise<boolean> {
-  const { loadedFrom } = await localDb.getMeta();
+  const { loadedFrom, earliestAt, syncRevision } = await localDb.getMeta();
   if (loadedFrom === null && !options.type) return false;
   const to = options.type ? Date.now() + DAY_MS : loadedFrom!;
   let from = Math.max(0, options.from);
-  const { earliestAt } = await localDb.getMeta();
   // Nicht ueber den aeltesten Eintrag des Servers hinaus blaettern.
   if (!options.type && earliestAt !== null && from < earliestAt) from = earliestAt;
   if (to <= from) return true;
@@ -99,9 +98,16 @@ export async function loadEntries(options: { from: number; type?: string }): Pro
     const res = await fetch(`/api/entries?${query}`, { credentials: "include", headers: { [SYNC_PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION) } });
     if (!res.ok) return false;
     const body = (await res.json()) as { entries: WireEntry[]; truncated: boolean; earliestAt: number | null };
-    // Bei abgeschnittener Antwort reicht das Fenster nur bis zum aeltesten gelieferten Eintrag.
-    const covered = body.truncated ? Math.min(...body.entries.map((e) => e.startAt)) : from;
-    await localDb.putLoadedEntries(body.entries, options.type ? undefined : covered, body.earliestAt);
+    // Bei abgeschnittener Antwort reicht das Fenster nur bis zum aeltesten gelieferten Eintrag;
+    // `to` ist exklusiv, daher +1, damit weitere Eintraege mit gleichem Startzeitpunkt nachkommen.
+    const covered = body.truncated ? Math.min(...body.entries.map((e) => e.startAt)) + 1 : from;
+    const applied = await localDb.putLoadedEntries(
+      body.entries,
+      options.type ? undefined : covered,
+      body.earliestAt,
+      syncRevision
+    );
+    if (!applied) return false;
     notifyStorageChange();
     return !body.truncated;
   } catch {
@@ -121,10 +127,13 @@ export async function fetchEntriesSince(from: number): Promise<EntryRecord[]> {
     const res = await fetch(`/api/entries?${query}`, { credentials: "include", headers: { [SYNC_PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION) } });
     if (!res.ok) throw new Error(`entries fetch failed: ${res.status}`);
     const body = (await res.json()) as { entries: WireEntry[]; truncated: boolean };
+    const before = result.size;
     for (const e of body.entries) result.set(e.id, { ...e, deleted: false });
     const oldest = Math.min(...body.entries.map((e) => e.startAt));
-    if (!body.truncated || oldest >= to) break;
-    to = oldest;
+    // Der naechste Abschnitt beginnt inklusive des aeltesten Zeitpunkts (to ist exklusiv), damit
+    // Eintraege mit gleichem Startzeitpunkt an der Seitengrenze nicht fehlen.
+    if (!body.truncated || result.size === before || oldest + 1 >= to) break;
+    to = oldest + 1;
   }
   return [...result.values()];
 }

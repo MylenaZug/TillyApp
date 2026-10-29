@@ -146,8 +146,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     if (f) setFoodTypes(JSON.parse(f));
     if (s) setSymptomTypes(JSON.parse(s));
     // Eine gerade getippte Notiz nicht durch den Serverstand ueberschreiben.
-    if (gn && !(afterSync && noteTimerRef.current)) setGeneralNote(gn);
-    if (fp && !(afterSync && foodPlanTimerRef.current)) setFoodPlan(fp);
+    if (gn !== null && !(afterSync && noteTimerRef.current)) setGeneralNote(gn);
+    if (fp !== null && !(afterSync && foodPlanTimerRef.current)) setFoodPlan(fp);
     if (fps) setFoodPlanSlots(JSON.parse(fps));
     setAloneStart(parseAloneStart(as));
     // Standanduebungen kommen als DB-Seed (siehe db/seed.ts) bereits befuellt aus dem

@@ -180,6 +180,26 @@ describe("Nachladen vom Server", () => {
     expect(await listEntries()).toEqual([]);
   });
 
+  it("blaettert an der Seitengrenze inklusive gleicher Startzeitpunkte", async () => {
+    const fetchMock = respond([
+      { entries: [wire("b", 2000), wire("c", 2000)], truncated: true },
+      { entries: [wire("c", 2000), wire("d", 2000), wire("a", 1000)], truncated: false },
+    ]);
+
+    const list = await fetchEntriesSince(0);
+
+    expect(list.map((e) => e.id).sort()).toEqual(["a", "b", "c", "d"]);
+    expect(String(fetchMock.mock.calls[1][0])).toContain("to=2001");
+  });
+
+  it("loadEntries speichert bei abgeschnittener Antwort ein Fenster inklusive der Grenze", async () => {
+    await localDb.applyPull({ protocol: 3, token: 1, full: true, windowStart: 5000, earliestAt: 1000, entries: [], kv: [], dailyPatience: [] });
+    respond([{ entries: [wire("x", 3000)], truncated: true }]);
+
+    expect(await loadEntries({ from: 1000 })).toBe(false);
+    expect(await getLoadedFrom()).toBe(3001);
+  });
+
   it("loadEntries ohne bekanntes Fenster tut nichts", async () => {
     const fetchMock = respond([]);
     expect(await loadEntries({ from: 0 })).toBe(false);
@@ -194,6 +214,33 @@ describe("Nachladen vom Server", () => {
 
     expect((await listEntries()).map((e) => e.id)).toEqual(["old"]);
     expect(await getLoadedFrom()).toBe(1000);
+  });
+
+  it("verwirft eine veraltete History-Antwort, wenn inzwischen ein neuerer Sync angewendet wurde", async () => {
+    await localDb.applyPull({ protocol: 3, token: 1, full: true, windowStart: 5000, earliestAt: 1000, entries: [], kv: [], dailyPatience: [] });
+
+    let resolveFetch!: (response: { ok: boolean; json: () => Promise<object> }) => void;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => { resolveFetch = resolve; })));
+    const loading = loadEntries({ from: 1000 });
+    await vi.waitFor(() => expect(resolveFetch).toBeTypeOf("function"));
+
+    await localDb.applyPull({
+      protocol: 3,
+      token: 2,
+      full: false,
+      windowStart: null,
+      earliestAt: 1000,
+      entries: [{ ...wire("entry", 1500), updatedAt: 2, serverSeq: 2, data: { note: "new" } }],
+      kv: [],
+      dailyPatience: [],
+    });
+    resolveFetch({
+      ok: true,
+      json: async () => ({ entries: [{ ...wire("entry", 1500), updatedAt: 1, serverSeq: 1, data: { note: "old" } }], truncated: false, earliestAt: 1000 }),
+    });
+
+    expect(await loading).toBe(false);
+    expect((await listEntries()).find((entry) => entry.id === "entry")?.data.note).toBe("new");
   });
 });
 

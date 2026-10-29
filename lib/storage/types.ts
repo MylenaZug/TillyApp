@@ -32,6 +32,8 @@ export type PendingQueue = {
 export type SyncMeta = {
   // Sync-Token des Servers (server_seq); null = noch nie synchronisiert.
   token: number | null;
+  // Lokale Generation der angewendeten Pulls; verwirft veraltete History-Antworten.
+  syncRevision: number;
   // Fruehester Zeitpunkt, ab dem Eintraege lokal vollstaendig vorliegen (aelteres wird nachgeladen).
   loadedFrom: number | null;
   // Aeltester Eintrag auf dem Server; null = unbekannt oder keine Eintraege.

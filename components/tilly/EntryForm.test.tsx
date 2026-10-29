@@ -119,6 +119,18 @@ describe("EntryForm Zeitpunkt (getrennte Datum- und Uhrzeit-Felder)", () => {
     expect(time()!.value).toBe("07:45");
   });
 
+  it("laesst sich nach dem Leeren des Datums weiter bearbeiten und speichert nur gueltig", async () => {
+    const { onSave, date, time } = setup("food", existingFood(new Date(2026, 2, 5, 7, 45).getTime()));
+    fireEvent.change(date(), { target: { value: "" } });
+    expect(screen.getByRole("button", { name: "Änderungen speichern" })).toBeDisabled();
+    expect(time()!.value).toBe("07:45");
+
+    fireEvent.change(date(), { target: { value: "2026-04-10" } });
+    await userEvent.click(screen.getByRole("button", { name: "Änderungen speichern" }));
+    const saved = new Date(onSave.mock.calls[0][1].startAt);
+    expect([saved.getMonth(), saved.getDate(), saved.getHours(), saved.getMinutes()]).toEqual([3, 10, 7, 45]);
+  });
+
   it("speichert die geaenderte Uhrzeit, ohne das Datum zu veraendern", async () => {
     const { onSave, time } = setup("food", existingFood(new Date(2026, 2, 5, 7, 45).getTime()));
     fireEvent.change(time()!, { target: { value: "18:20" } });

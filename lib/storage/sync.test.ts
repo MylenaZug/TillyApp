@@ -88,6 +88,16 @@ describe("runSync", () => {
     expect(await localDb.listRejected()).toEqual([]);
   });
 
+  it("bestaetigt die Queue nicht, wenn die Push-Antwort nicht lesbar ist", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    await localDb.enqueueEntry(entry("e1"));
+    const broken = { ok: true, status: 200, json: async () => { throw new Error("connection lost"); } } as unknown as Response;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(broken));
+
+    expect(await runSync()).toEqual({ status: "failed" });
+    expect((await localDb.getQueue()).entries.map((e) => e.id)).toEqual(["e1"]);
+  });
+
   it("setzt earliestAt zurueck, wenn der Server bei einem vollen Sync keinen Eintrag mehr kennt", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ok(pull({ earliestAt: T }))));
     await runSync();
