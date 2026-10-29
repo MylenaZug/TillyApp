@@ -1,7 +1,7 @@
 {
   "name": "tilly-tracker",
   "private": true,
-  "version": "2.0.0",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
     "dev": "next dev",
@@ -9,8 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:migrate:alone": "tsx scripts/migrate-alone.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx db/seed.ts",
     "backup": "tsx scripts/backup.ts",
     "restore": "tsx scripts/restore.ts",
@@ -20,14 +19,15 @@
   "dependencies": {
     "better-sqlite3": "^11.5.0",
     "drizzle-orm": "^0.36.0",
-    "idb-keyval": "^6.2.1",
+    "idb": "^8.0.4",
     "lucide-react": "^0.383.0",
     "next": "^15.0.0",
     "next-auth": "^5.0.0-beta.25",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.12.7",
-    "sharp": "^0.35.5"
+    "sharp": "^0.35.5",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@ducanh2912/next-pwa": "^10.2.8",

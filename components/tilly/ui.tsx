@@ -18,19 +18,28 @@ const DEFAULT_STAR_ICON: StarIconSrc = {
 };
 
 export function PawTrailLoader() {
+  const version = process.env.NEXT_PUBLIC_APP_VERSION;
   return (
-    <div className="flex h-full items-center justify-center gap-2">
-      {[0, 1, 2, 3].map((i) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={i}
-          src={DEFAULT_STAR_ICON.filled}
-          alt=""
-          width={20}
-          height={20}
-          style={{ opacity: 0.3, animation: `tillyPawFade 1.1s ${i * 0.15}s infinite ease-in-out` }}
-        />
-      ))}
+    <div className="flex h-full flex-col items-center justify-center gap-5">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/icons/icon-192.png" alt="" width={96} height={96} className="rounded-3xl shadow-sm" draggable={false} />
+      <div className="text-center">
+        <div className="text-xl font-bold leading-none text-ink">Tilly Tracker</div>
+        {version && <div className="mt-1 text-[11px] text-ink-soft">Version {version}</div>}
+      </div>
+      <div className="flex items-center gap-2">
+        {[0, 1, 2, 3].map((i) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={i}
+            src={DEFAULT_STAR_ICON.filled}
+            alt=""
+            width={20}
+            height={20}
+            style={{ opacity: 0.3, animation: `tillyPawFade 1.1s ${i * 0.15}s infinite ease-in-out` }}
+          />
+        ))}
+      </div>
       <style>{`@keyframes tillyPawFade{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}`}</style>
     </div>
   );

@@ -133,7 +133,7 @@ export function ExercisesView({
   const trainingSessionsFor = (name: string) =>
     entries
       .filter((e) => e.type === "training" && e.activity === name)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => b.startAt - a.startAt);
 
   useEffect(() => {
     if (!dragId) return;
@@ -264,7 +264,7 @@ export function ExercisesView({
                           <span className="text-[11px] text-gold">{starGlyphs(ex.masteryLevel)}</span>
                         </div>
                         <div className="truncate text-[11px] text-ink-soft">
-                          {lastSession ? `Zuletzt trainiert: ${dayLabel(lastSession.date)}` : "Noch nicht trainiert"}
+                          {lastSession ? `Zuletzt trainiert: ${dayLabel(lastSession.startAt)}` : "Noch nicht trainiert"}
                         </div>
                       </div>
                     </div>
@@ -289,7 +289,7 @@ export function ExercisesView({
                         <div className="space-y-1">
                           {sessions.slice(0, 5).map((s) => (
                             <div key={s.id} className="flex items-center justify-between text-[13px] text-ink">
-                              <span className="text-ink-soft">{dayLabel(s.date)}</span>
+                              <span className="text-ink-soft">{dayLabel(s.startAt)}</span>
                               <span className="tracking-widest text-gold" title="Tilly">
                                 {starGlyphs(s.dogStars)}
                               </span>

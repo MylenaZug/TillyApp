@@ -22,7 +22,7 @@ export function DayRow({ entry, onClick }: { entry: AnyEntry; onClick?: (entry: 
         <div className="flex items-center gap-1.5" aria-label={meta.label} title={meta.label}>
           <CatIcon cat={meta} size={13} />
         </div>
-        {showTime && <span className="text-[11px] text-ink-soft">{fmtTime(entry.date)}</span>}
+        {showTime && <span className="text-[11px] text-ink-soft">{fmtTime(entry.startAt)}</span>}
       </div>
       {entrySummary(entry) && <div className="mt-0.5 break-words text-[13px] text-ink-soft">{entrySummary(entry)}</div>}
       {entry.note && <div className="mt-1 break-words text-[12px] italic text-ink-soft">„{entry.note}"</div>}
@@ -58,10 +58,12 @@ export function TwoWeekCalendar({
   entries,
   onEdit,
   patience = [],
+  onReachDate,
 }: {
   entries: AnyEntry[];
   onEdit: (entry: AnyEntry) => void;
   patience?: PatienceRecord[];
+  onReachDate?: (date: Date) => void;
 }) {
   const today = startOfDay(new Date());
   const todayKey = dateKey(today);
@@ -89,6 +91,7 @@ export function TwoWeekCalendar({
     const newEnd = new Date(newStart);
     newEnd.setDate(newStart.getDate() + 13);
     setSelected(next === 0 ? todayKey : dateKey(newEnd));
+    onReachDate?.(newStart);
   };
 
   const monthLabel = (() => {
@@ -104,7 +107,7 @@ export function TwoWeekCalendar({
   const catsForKey = (key: string) => {
     const ids: string[] = [];
     entries.forEach((e) => {
-      if (CALENDAR_CATEGORY_IDS.includes(e.type) && dateKey(e.date) === key && !ids.includes(e.type)) ids.push(e.type);
+      if (CALENDAR_CATEGORY_IDS.includes(e.type) && dateKey(e.startAt) === key && !ids.includes(e.type)) ids.push(e.type);
     });
     return ids;
   };
@@ -117,7 +120,7 @@ export function TwoWeekCalendar({
       : selected === yesterdayKey
         ? "Gestern"
         : `${selectedDate.toLocaleDateString("de-DE", { weekday: "long" })}, ${selectedDate.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}`;
-  const selectedEntries = entries.filter((e) => dateKey(e.date) === selected);
+  const selectedEntries = entries.filter((e) => dateKey(e.startAt) === selected);
   const selectedPatience = patience.filter((r) => r.date === selected && r.geduld > 0);
 
   return (
@@ -215,23 +218,28 @@ export function PatienceTimelineRow({ record }: { record: PatienceRecord }) {
   );
 }
 
-export function TimelineRow({ entry, onClick }: { entry: AnyEntry; onClick: () => void }) {
+export function TimelineRow({ entry, onClick, rejection }: { entry: AnyEntry; onClick: () => void; rejection?: string }) {
   const meta = catMeta(entry.type);
   return (
     <button onClick={onClick} className="relative flex w-full items-start gap-3 pb-4 text-left">
       <div className="absolute -left-4 top-0.5 flex h-4 w-4 items-center justify-center rounded-full" style={{ background: meta.hexSoft }}>
         <PawPrint size={9} style={{ color: meta.hex }} />
       </div>
-      <div className="flex-1 rounded-xl border border-hairline bg-card px-3 py-2.5">
+      <div className={`flex-1 rounded-xl border px-3 py-2.5 ${rejection ? "border-red-300 bg-red-50" : "border-hairline bg-card"}`}>
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-ink">{meta.label}</span>
           <span className="text-[11px] text-ink-soft">
             {CATEGORIES_WITH_TIME.includes(entry.type)
-              ? new Date(entry.date).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-              : new Date(entry.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+              ? new Date(entry.startAt).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+              : new Date(entry.startAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}
           </span>
         </div>
         {entrySummary(entry) && <div className="mt-0.5 break-words text-[13px] text-ink-soft">{entrySummary(entry)}</div>}
+        {rejection && (
+          <div className="mt-1 break-words text-[12px] font-medium text-red-700">
+            Vom Server abgelehnt – bitte prüfen und erneut speichern oder löschen. ({rejection})
+          </div>
+        )}
       </div>
     </button>
   );

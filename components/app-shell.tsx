@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BarChart3, BookOpen, Clock3, Images, Plus, X } from "lucide-react";
 import {
   deleteEntry,
   getKv,
+  fetchEntriesSince,
+  getLoadedFrom,
+  isHistoryComplete,
   getPatience,
+  loadEntries,
   listPatience,
   listEntries,
   saveEntry,
@@ -16,8 +20,8 @@ import { useSyncStatus } from "@/lib/storage/useSyncStatus";
 import { SyncButton } from "@/components/tilly/SyncButton";
 import type { EntryRecord, PatienceRecord } from "@/lib/storage/types";
 import { ADDABLE_CATEGORIES, SYMPTOM_CATEGORIES, catMeta } from "@/lib/tilly/constants";
-import { dateKey, formatDuration, nowLocalISO, tillyAge, weightFeedback } from "@/lib/tilly/helpers";
-import { aloneDurationMs, MIN_ALONE_DURATION_MS, normalizeAloneData, roundToMinute } from "@/lib/tilly/alone";
+import { dateKey, formatDuration, tillyAge, weightFeedback } from "@/lib/tilly/helpers";
+import { aloneDurationMs, MIN_ALONE_DURATION_MS, roundToMinute } from "@/lib/tilly/alone";
 import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, PawTrailLoader, PrimaryButton } from "@/components/tilly/ui";
 import { HomeView } from "@/components/tilly/HomeView";
@@ -30,29 +34,20 @@ import { EntryForm } from "@/components/tilly/EntryForm";
 const DEFAULT_TRAINING_TYPES = ["Sitz", "Leinenführigkeit", "Rückruf"];
 
 function parseEntryRecord(record: EntryRecord): AnyEntry {
-  try {
-    const data = JSON.parse(record.data) as Record<string, unknown>;
-    if (record.type === "alone") {
-      const normalized = normalizeAloneData(data, record.startDatetime, record.endDatetime);
-      return {
-        id: record.id,
-        type: record.type as CategoryId,
-        updatedAt: record.updatedAt,
-        ...normalized.data,
-        date: normalized.startDatetime ?? new Date(record.updatedAt).toISOString(),
-        startDatetime: normalized.startDatetime ?? undefined,
-        endDatetime: normalized.endDatetime ?? undefined,
-      } as AnyEntry;
-    }
-    return { id: record.id, type: record.type as CategoryId, updatedAt: record.updatedAt, ...data } as AnyEntry;
-  } catch {
-    return {
-      id: record.id,
-      type: record.type as CategoryId,
-      updatedAt: record.updatedAt,
-      date: new Date(record.updatedAt).toISOString(),
-    } as AnyEntry;
-  }
+  return {
+    ...record.data,
+    id: record.id,
+    type: record.type as CategoryId,
+    updatedAt: record.updatedAt,
+    startAt: record.startAt,
+    endAt: record.endAt,
+  } as AnyEntry;
+}
+
+// kv "alone-start" enthaelt die Startzeit als Epoch-ms-String; leer, wenn kein Timer laeuft.
+function parseAloneStart(value: string | null): number | null {
+  const ms = Number(value);
+  return value && Number.isFinite(ms) && ms > 0 ? ms : null;
 }
 
 function NavButton({
@@ -76,6 +71,8 @@ function NavButton({
 
 type View = "home" | "history" | "analysis" | "exercises" | "gallery" | "add";
 
+type ToastTone = "ok" | "warn";
+
 export default function AppShell({ userEmail }: { userEmail: string }) {
   const [ready, setReady] = useState(false);
   const [entries, setEntries] = useState<AnyEntry[]>([]);
@@ -93,49 +90,77 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const foodPlanSlotsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [patience, setPatience] = useState(0);
   const [allPatience, setAllPatience] = useState<PatienceRecord[]>([]);
-  const [aloneStart, setAloneStart] = useState<string | null>(null);
+  const [aloneStart, setAloneStart] = useState<number | null>(null);
 
   const [view, setView] = useState<View>("home");
   const [addCategory, setAddCategory] = useState<CategoryId | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<CategoryId | "all">("all");
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sync = useSyncStatus();
 
+  const [loadedFrom, setLoadedFrom] = useState<number | null>(null);
+  const [historyComplete, setHistoryComplete] = useState(false);
+
+  async function loadOlder(from?: number) {
+    const current = await getLoadedFrom();
+    if (current === null) return false;
+    const ok = await loadEntries({ from: from ?? current - 30 * 24 * 60 * 60 * 1000 });
+    await refresh();
+    return ok;
+  }
+
+  // Beim Zurueckblaettern im Kalender bei Bedarf nachladen.
+  async function ensureLoaded(date: Date) {
+    const current = await getLoadedFrom();
+    if (current !== null && date.getTime() < current && !(await isHistoryComplete())) await loadOlder(date.getTime());
+  }
+
+  const loadAllEntries = useCallback(async () => (await fetchEntriesSince(0)).map(parseEntryRecord), []);
+
   async function refresh() {
+    setLoadedFrom(await getLoadedFrom());
+    setHistoryComplete(await isHistoryComplete());
     const records = await listEntries();
-    const parsed = records.map(parseEntryRecord).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const parsed = records.map(parseEntryRecord).sort((a, b) => b.startAt - a.startAt);
     setEntries(parsed);
+  }
+
+  // Liest Einstellungen, Eintraege und Geduld aus dem lokalen Store. Laeuft beim Start und nach
+  // jedem Sync - beim allerersten Start ist der Store beim Rendern noch leer.
+  async function loadFromStore(afterSync: boolean) {
+    const [t, f, s, ex, gn, fp, fps, as] = await Promise.all([
+      getKv("training-types"),
+      getKv("food-types"),
+      getKv("symptom-types"),
+      getKv("exercises"),
+      getKv("general-note"),
+      getKv("food-plan"),
+      getKv("food-plan-slots"),
+      getKv("alone-start"),
+    ]);
+    if (t) setTrainingTypes(JSON.parse(t));
+    if (f) setFoodTypes(JSON.parse(f));
+    if (s) setSymptomTypes(JSON.parse(s));
+    // Eine gerade getippte Notiz nicht durch den Serverstand ueberschreiben.
+    if (gn !== null && !(afterSync && noteTimerRef.current)) setGeneralNote(gn);
+    if (fp !== null && !(afterSync && foodPlanTimerRef.current)) setFoodPlan(fp);
+    if (fps) setFoodPlanSlots(JSON.parse(fps));
+    setAloneStart(parseAloneStart(as));
+    // Standanduebungen kommen als DB-Seed (siehe db/seed.ts) bereits befuellt aus dem
+    // kv_store - hier nur noch laden, kein Runtime-Merge/Seed im Client mehr noetig.
+    if (ex) setExercises(JSON.parse(ex));
+
+    await Promise.all([refresh(), getPatience(userEmail, dateKey(new Date())).then(setPatience), listPatience().then(setAllPatience)]);
   }
 
   useEffect(() => {
     (async () => {
       try {
-        const [t, f, s, ex, gn, fp, fps, as] = await Promise.all([
-          getKv("training-types"),
-          getKv("food-types"),
-          getKv("symptom-types"),
-          getKv("exercises"),
-          getKv("general-note"),
-          getKv("food-plan"),
-          getKv("food-plan-slots"),
-          getKv("alone-start"),
-        ]);
-        if (t) setTrainingTypes(JSON.parse(t));
-        if (f) setFoodTypes(JSON.parse(f));
-        if (s) setSymptomTypes(JSON.parse(s));
-        if (gn) setGeneralNote(gn);
-        if (fp) setFoodPlan(fp);
-        if (fps) setFoodPlanSlots(JSON.parse(fps));
-        if (as) setAloneStart(as);
-        // Standanduebungen kommen als DB-Seed (siehe db/seed.ts) bereits befuellt aus dem
-        // kv_store - hier nur noch laden, kein Runtime-Merge/Seed im Client mehr noetig.
-        if (ex) setExercises(JSON.parse(ex));
-
-        await Promise.all([refresh(), getPatience(userEmail, dateKey(new Date())).then(setPatience), listPatience().then(setAllPatience)]);
+        await loadFromStore(false);
       } finally {
         setReady(true);
       }
@@ -143,19 +168,66 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail]);
 
-  // Geduld der anderen kommt per Sync - nach jedem erfolgreichen Sync neu einlesen.
+  // Die Uebungen zeigen die letzten Trainings - auch die, die ausserhalb des Startfensters liegen.
   useEffect(() => {
-    if (!sync.lastSyncAt) return;
-    void listPatience().then(setAllPatience);
-  }, [sync.lastSyncAt]);
+    if (view !== "exercises") return;
+    void loadEntries({ from: 0, type: "training" }).then(refresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
-  function showToast(message: string) {
+  // Alles, was per Sync kommt (Eintraege, Einstellungen, Geduld der anderen), neu einlesen -
+  // aber nur, wenn ein Pull lokal wirklich etwas geaendert hat.
+  useEffect(() => {
+    if (sync.dataVersion === 0) return;
+    void loadFromStore(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sync.dataVersion]);
+
+  // Toast, sobald neue Eintraege vom Server abgelehnt wurden.
+  const rejectedCount = Object.keys(sync.rejected).length;
+  const prevRejectedCount = useRef(0);
+  useEffect(() => {
+    if (rejectedCount > prevRejectedCount.current) {
+      showToast(`${rejectedCount} ${rejectedCount === 1 ? "Eintrag" : "Einträge"} vom Server abgelehnt · bitte im Verlauf prüfen`, "warn");
+    }
+    prevRejectedCount.current = rejectedCount;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rejectedCount]);
+
+  // Meldungen: "<Gegenstand> <Vorgang>", Zusatzinfo nach " · ", kein Emoji.
+  // Rueckmeldung zum Klick auf den Sync-Button.
+  async function handleManualSync() {
+    const result = await sync.syncNow();
+    if (!result) return;
+    switch (result.status) {
+      case "ok": {
+        const parts = [
+          result.pushed > 0 ? `${result.pushed} gesendet` : "",
+          result.pulled > 0 ? `${result.pulled} empfangen` : "",
+        ].filter(Boolean);
+        showToast(`Sync abgeschlossen · ${parts.length ? parts.join(", ") : "alles aktuell"}`);
+        break;
+      }
+      case "offline":
+        showToast("Sync nicht möglich · offline", "warn");
+        break;
+      case "outdated":
+        showToast("Sync nicht möglich · App veraltet, bitte neu laden", "warn");
+        break;
+      case "busy":
+        showToast("Sync läuft bereits");
+        break;
+      default:
+        showToast("Sync fehlgeschlagen · wird erneut versucht", "warn");
+    }
+  }
+
+  function showToast(message: string, tone: ToastTone = "ok") {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToast(message);
-    // Laengere Rueckmeldungen (z.B. der Gewichts-Vergleich) brauchen mehr Lesezeit als ein
-    // kurzes "X gespeichert ✓".
-    const duration = message.length > 30 ? 4200 : 2200;
-    toastTimerRef.current = setTimeout(() => setToast(""), duration);
+    setToast({ message, tone });
+    // Laengere Rueckmeldungen (z.B. der Gewichts-Vergleich) brauchen mehr Lesezeit.
+    const duration = tone === "warn" ? 6000 : message.length > 30 ? 4200 : 2200;
+    toastTimerRef.current = setTimeout(() => setToast(null), duration);
   }
 
   function openAdd(catId: CategoryId, existing?: AnyEntry) {
@@ -171,10 +243,10 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     setEditingId(null);
   }
 
-  async function handleSaveEntry(data: Record<string, unknown>) {
+  async function handleSaveEntry(data: Record<string, unknown>, range: { startAt: number; endAt: number }) {
     if (!addCategory) return;
     const isNew = !editingId;
-    await saveEntry(editingId ?? undefined, addCategory, data);
+    await saveEntry(editingId ?? undefined, addCategory, data, range);
 
     if (addCategory === "training" && typeof data.activity === "string" && data.activity && !trainingTypes.includes(data.activity)) {
       const next = [data.activity, ...trainingTypes];
@@ -208,7 +280,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         : null;
 
     await refresh();
-    showToast(weightMessage ?? `${catMeta(addCategory).label} ${isNew ? "gespeichert" : "aktualisiert"} ✓`);
+    showToast(weightMessage ? `Gewicht ${isNew ? "gespeichert" : "aktualisiert"} · ${weightMessage}` : `${catMeta(addCategory).label} ${isNew ? "gespeichert" : "aktualisiert"}`);
     closeForm();
   }
 
@@ -219,12 +291,17 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     closeForm();
   }
 
-  const todayCheck = entries.find((e) => e.type === "tagescheck" && dateKey(e.date) === dateKey(new Date()));
+  const todayCheck = entries.find((e) => e.type === "tagescheck" && dateKey(e.startAt) === dateKey(new Date()));
 
   async function updateTodayCheck(field: "folgsamkeit" | "energie", value: number) {
-    const base = todayCheck ?? { date: nowLocalISO(), folgsamkeit: 0, energie: 0, note: "" };
-    const data = { ...base, [field]: value };
-    await saveEntry(todayCheck?.id, "tagescheck", data);
+    const data = {
+      folgsamkeit: todayCheck?.folgsamkeit ?? 0,
+      energie: todayCheck?.energie ?? 0,
+      note: todayCheck?.note ?? "",
+      [field]: value,
+    };
+    const at = todayCheck?.startAt ?? Date.now();
+    await saveEntry(todayCheck?.id, "tagescheck", data, { startAt: at, endAt: at });
     await refresh();
   }
 
@@ -240,7 +317,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     if (noteTimerRef.current) clearTimeout(noteTimerRef.current);
     noteTimerRef.current = setTimeout(async () => {
       try {
-        await setKv("general-note", text);
+        noteTimerRef.current = null;
+        await setKv("general-note", text, { deferSync: true });
         setNoteStatus("saved");
         setTimeout(() => setNoteStatus(""), 1500);
       } catch {
@@ -255,7 +333,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     if (foodPlanTimerRef.current) clearTimeout(foodPlanTimerRef.current);
     foodPlanTimerRef.current = setTimeout(async () => {
       try {
-        await setKv("food-plan", text);
+        foodPlanTimerRef.current = null;
+        await setKv("food-plan", text, { deferSync: true });
         setFoodPlanStatus("saved");
         setTimeout(() => setFoodPlanStatus(""), 1500);
       } catch {
@@ -284,39 +363,40 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   async function confirmFoodPlanSlot(daytime: string) {
     const slot = foodPlanSlots[daytime];
     if (!slot || !slot.food.trim()) return;
-    const data = { date: nowLocalISO(), food: slot.food.trim(), amount: slot.amount, amountUnit: slot.amountUnit, daytime };
-    await saveEntry(undefined, "food", data);
+    const data = { food: slot.food.trim(), amount: slot.amount, amountUnit: slot.amountUnit, daytime };
+    const at = Date.now();
+    await saveEntry(undefined, "food", data, { startAt: at, endAt: at });
     if (!foodTypes.includes(slot.food.trim())) {
       const next = [slot.food.trim(), ...foodTypes];
       setFoodTypes(next);
       void setKv("food-types", JSON.stringify(next));
     }
     await refresh();
-    showToast(`${catMeta("food").label} gespeichert ✓`);
+    showToast(`${catMeta("food").label} gespeichert`);
   }
 
   async function startAloneTimer() {
-    const iso = new Date().toISOString();
-    setAloneStart(iso);
-    await setKv("alone-start", iso);
+    const startedAt = Date.now();
+    setAloneStart(startedAt);
+    await setKv("alone-start", String(startedAt));
   }
 
   async function stopAloneTimer() {
     if (!aloneStart) return;
-    const actualEnd = new Date();
-    const actualDurationMs = actualEnd.getTime() - new Date(aloneStart).getTime();
+    const actualEnd = Date.now();
+    const actualDurationMs = actualEnd - aloneStart;
     const startedAt = roundToMinute(aloneStart);
-    const endedAt = roundToMinute(actualEnd.toISOString());
+    const endedAt = roundToMinute(actualEnd);
     const ms = aloneDurationMs(startedAt, endedAt);
     setAloneStart(null);
     await setKv("alone-start", "");
     if (actualDurationMs < MIN_ALONE_DURATION_MS || ms < MIN_ALONE_DURATION_MS || !startedAt || !endedAt) {
-      showToast("Unter 1 Minute nicht gespeichert");
+      showToast("Allein-Zeit nicht gespeichert · unter 1 Minute", "warn");
       return;
     }
-    await saveEntry(undefined, "alone", { startDatetime: startedAt, endDatetime: endedAt });
+    await saveEntry(undefined, "alone", {}, { startAt: startedAt, endAt: endedAt });
     await refresh();
-    showToast(`Tilly war ${formatDuration(ms)} allein`);
+    showToast(`Allein-Zeit gespeichert · ${formatDuration(ms)}`);
   }
 
   async function saveExercise(exercise: Exercise) {
@@ -365,7 +445,21 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             </div>
           </div>
         </div>
-        <SyncButton {...sync} userEmail={userEmail} />
+        <div className="relative">
+          <SyncButton {...sync} syncNow={handleManualSync} userEmail={userEmail} />
+          {toast && (
+            <div
+              role="status"
+              className={`absolute right-0 top-full z-50 mt-2.5 w-max max-w-[min(80vw,320px)] rounded-2xl px-4 py-2.5 shadow-lg ${toast.tone === "warn" ? "bg-red-700" : "bg-ink"}`}
+            >
+              <span
+                aria-hidden
+                className={`absolute -top-1 right-3.5 h-3 w-3 rotate-45 rounded-sm ${toast.tone === "warn" ? "bg-red-700" : "bg-ink"}`}
+              />
+              <span className="relative text-sm font-medium text-white">{toast.message}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-3">
@@ -393,9 +487,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           />
         )}
         {view === "history" && (
-          <HistoryView patience={allPatience} entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
+          <HistoryView patience={allPatience} loadedFrom={loadedFrom} historyComplete={historyComplete} rejected={sync.rejected} onLoadOlder={() => loadOlder()} onReachDate={(d) => void ensureLoaded(d)} entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
         )}
-        {view === "analysis" && <AnalysisView entries={entries} onAddWeight={() => openAdd("weight")} />}
+        {view === "analysis" && <AnalysisView entries={entries} loadAll={loadAllEntries} onAddWeight={() => openAdd("weight")} />}
         {view === "gallery" && <GalleryView />}
         {view === "exercises" && (
           <ExercisesView
@@ -419,7 +513,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             foodPlanSlots={foodPlanSlots}
             onFoodPlanSlotsChange={handleFoodPlanSlotsChange}
             foodPlanStatus={foodPlanStatus}
-            onSave={(data) => void handleSaveEntry(data)}
+            onSave={(data, range) => void handleSaveEntry(data, range)}
             onDelete={editingId ? () => void handleDeleteEntry() : null}
             onCancel={closeForm}
           />
@@ -476,11 +570,6 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       )}
 
 
-      {toast && (
-        <div className="absolute bottom-24 left-1/2 w-[min(90%,360px)] -translate-x-1/2 rounded-2xl bg-ink px-4 py-2.5 text-center shadow-lg">
-          <span className="text-sm font-medium text-white">{toast}</span>
-        </div>
-      )}
     </div>
   );
 }

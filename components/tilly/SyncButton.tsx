@@ -19,7 +19,8 @@ export function syncColor(status: SyncInfo["status"], lastSyncAt: number | null,
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-function describe(info: Pick<SyncInfo, "status" | "pending" | "lastSyncAt">, now: number) {
+function describe(info: Pick<SyncInfo, "status" | "pending" | "lastSyncAt"> & { outdated?: boolean }, now: number) {
+  if (info.outdated) return "App veraltet – bitte neu laden";
   if (info.status === "offline") return "Offline";
   const pending = info.pending > 0 ? `, ${info.pending} ausstehend` : "";
   if (info.lastSyncAt === null) return `Noch nicht synchronisiert${pending}`;
@@ -27,17 +28,17 @@ function describe(info: Pick<SyncInfo, "status" | "pending" | "lastSyncAt">, now
   return `Zuletzt synchronisiert: ${minutes < 1 ? "gerade eben" : `vor ${minutes} Min`}${pending}`;
 }
 
-export function SyncButton({ status, pending, lastSyncAt, syncing, syncNow, userEmail }: SyncInfo & { userEmail: string }) {
+export function SyncButton({ status, pending, lastSyncAt, syncing, outdated, syncNow, userEmail }: SyncInfo & { userEmail: string }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 10000);
     return () => clearInterval(id);
   }, []);
 
-  const label = `Sync – ${describe({ status, pending, lastSyncAt }, now)}`;
+  const label = `Sync – ${describe({ status, pending, lastSyncAt, outdated }, now)}`;
   return (
     <button
-      onClick={() => void syncNow()}
+      onClick={() => (outdated ? window.location.reload() : void syncNow())}
       aria-label={label}
       title={`${userEmail} · ${label}`}
       style={{ backgroundColor: syncColor(status, lastSyncAt, now) }}

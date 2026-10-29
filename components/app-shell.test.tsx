@@ -23,17 +23,21 @@ vi.mock("@/lib/storage", () => ({
   getPatience: (userEmail: string, date: string) => mockGetPatience(userEmail, date),
   getKv: (key: string) => mockGetKv(key),
   setKv: (...args: unknown[]) => mockSetKv(...args),
+  getLoadedFrom: async () => null,
+  isHistoryComplete: async () => false,
+  loadEntries: async () => false,
+  fetchEntriesSince: async () => [],
 }));
 vi.mock("@/lib/storage/useSyncStatus", () => ({
   useSyncStatus: () => mockUseSyncStatus(),
 }));
 
-const syncInfo = (o: object) => ({ status: "synced", pending: 0, lastSyncAt: Date.now(), syncing: false, syncNow: vi.fn(), ...o });
+const syncInfo = (o: object) => ({ status: "synced", pending: 0, lastSyncAt: Date.now(), syncing: false, outdated: false, dataVersion: 0, rejected: {}, syncNow: vi.fn(), ...o });
 
 const { default: AppShell } = await import("@/components/app-shell");
 
 function makeEntry(overrides: Partial<EntryRecord>): EntryRecord {
-  return { id: "1", type: "food", data: "{}", updatedAt: Date.now(), deleted: 0, ...overrides };
+  return { id: "1", type: "food", data: {}, startAt: Date.now(), endAt: Date.now(), updatedAt: Date.now(), deleted: false, ...overrides };
 }
 
 beforeEach(() => {
@@ -87,6 +91,7 @@ describe("AppShell", () => {
       undefined,
       "tagescheck",
       expect.objectContaining({ folgsamkeit: 5 }),
+      expect.objectContaining({ startAt: expect.any(Number) }),
     );
   });
 
@@ -100,8 +105,19 @@ describe("AppShell", () => {
     expect(await screen.findByText("Keine Einträge in dieser Kategorie.")).toBeInTheDocument();
   });
 
-  it("stuerzt bei fehlerhaftem JSON in einem Eintrag nicht ab und zeigt keinen Platzhalter-Text", async () => {
-    mockListEntries.mockResolvedValue([makeEntry({ id: "broken", type: "food", data: "{not-json" })]);
+  it("markiert abgelehnte Eintraege im Verlauf und zeigt einen Toast", async () => {
+    mockListEntries.mockResolvedValue([makeEntry({ id: "r1", type: "stress", data: { level: 2 } })]);
+    mockUseSyncStatus.mockReturnValue(syncInfo({ rejected: { r1: "ungueltig" } }));
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+    await waitFor(() => expect(mockListEntries).toHaveBeenCalled());
+    expect(await screen.findByText(/1 Eintrag vom Server abgelehnt/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Verlauf" }));
+    expect(await screen.findByText(/Vom Server abgelehnt/)).toBeInTheDocument();
+  });
+
+  it("stuerzt bei einem Eintrag ohne typspezifische Felder nicht ab und zeigt keinen Platzhalter-Text", async () => {
+    mockListEntries.mockResolvedValue([makeEntry({ id: "broken", type: "food", data: {} })]);
     const user = userEvent.setup();
 
     render(<AppShell userEmail="a@example.com" />);
@@ -120,6 +136,28 @@ describe("AppShell", () => {
 
     expect(await screen.findByRole("button", { name: /Offline/ })).toBeInTheDocument();
     expect(await screen.findByTitle("a@example.com · Sync – Offline")).toBeInTheDocument();
+  });
+
+  it("meldet nach einem Klick auf Sync, was gesendet und empfangen wurde", async () => {
+    const syncNow = vi.fn().mockResolvedValue({ status: "ok", pushed: 2, pulled: 3 });
+    mockUseSyncStatus.mockReturnValue(syncInfo({ syncNow }));
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+
+    await user.click(await screen.findByRole("button", { name: /^Sync/ }));
+    expect(await screen.findByText("Sync abgeschlossen · 2 gesendet, 3 empfangen")).toBeInTheDocument();
+  });
+
+  it("meldet bei Klick auf Sync einen Fehlschlag und den Zustand 'alles aktuell'", async () => {
+    const syncNow = vi.fn().mockResolvedValueOnce({ status: "failed" }).mockResolvedValueOnce({ status: "ok", pushed: 0, pulled: 0 });
+    mockUseSyncStatus.mockReturnValue(syncInfo({ syncNow }));
+    const user = userEvent.setup();
+    render(<AppShell userEmail="a@example.com" />);
+
+    await user.click(await screen.findByRole("button", { name: /^Sync/ }));
+    expect(await screen.findByText("Sync fehlgeschlagen · wird erneut versucht")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Sync/ }));
+    expect(await screen.findByText("Sync abgeschlossen · alles aktuell")).toBeInTheDocument();
   });
 
   it("zeigt die Anzahl ausstehender Aenderungen an", async () => {
@@ -174,7 +212,7 @@ describe("AppShell", () => {
   });
 
   it("schiebt die Alleine-Karte bei laufendem Timer ganz nach oben", async () => {
-    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? new Date(Date.now() - 5 * 60_000).toISOString() : null));
+    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? String(Date.now() - 5 * 60_000) : null));
     render(<AppShell userEmail="a@example.com" />);
     const stop = await screen.findByRole("button", { name: "Stop" });
     const heute = screen.getByText("Heute");
@@ -182,34 +220,33 @@ describe("AppShell", () => {
   });
 
   it("speichert beim Stoppen nur Start und Ende und beendet den Timer", async () => {
-    const startedAt = new Date(Date.now() - 90 * 60_000).toISOString();
-    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? startedAt : null));
+    const startedAt = Date.now() - 90 * 60_000;
+    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? String(startedAt) : null));
     const user = userEvent.setup();
     render(<AppShell userEmail="a@example.com" />);
 
     await user.click(await screen.findByRole("button", { name: "Stop" }));
 
     await waitFor(() => expect(mockSaveEntry).toHaveBeenCalled());
-    const [id, type, data] = mockSaveEntry.mock.calls[0];
+    const [id, type, data, range] = mockSaveEntry.mock.calls[0];
     expect(id).toBeUndefined();
     expect(type).toBe("alone");
-    expect(data.startDatetime).toBe(new Date(Math.round(new Date(startedAt).getTime() / 60_000) * 60_000).toISOString());
-    expect(data).not.toHaveProperty("date");
-    expect(data).not.toHaveProperty("ms");
-    expect(new Date(data.endDatetime).getTime() - new Date(data.startDatetime).getTime()).toBe(90 * 60_000);
+    expect(range.startAt).toBe(Math.round(startedAt / 60_000) * 60_000);
+    expect(data).toEqual({});
+    expect(range.endAt - range.startAt).toBe(90 * 60_000);
     expect(mockSetKv).toHaveBeenCalledWith("alone-start", "");
     await waitFor(() => expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument());
   });
 
   it("loescht einen Timer unter einer Minute ohne einen Eintrag zu speichern", async () => {
-    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? new Date(Date.now() - 30_000).toISOString() : null));
+    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? String(Date.now() - 30_000) : null));
     const user = userEvent.setup();
     render(<AppShell userEmail="a@example.com" />);
 
     await user.click(await screen.findByRole("button", { name: "Stop" }));
 
     expect(mockSaveEntry).not.toHaveBeenCalled();
-    expect(await screen.findByText("Unter 1 Minute nicht gespeichert")).toBeInTheDocument();
+    expect(await screen.findByText("Allein-Zeit nicht gespeichert · unter 1 Minute")).toBeInTheDocument();
     expect(mockSetKv).toHaveBeenCalledWith("alone-start", "");
   });
 
@@ -248,7 +285,7 @@ describe("AppShell", () => {
   });
 
   it("laedt die Geduld nach einem Sync neu", async () => {
-    mockUseSyncStatus.mockReturnValue(syncInfo({ lastSyncAt: 1000 }));
+    mockUseSyncStatus.mockReturnValue(syncInfo({ dataVersion: 1 }));
     render(<AppShell userEmail="a@example.com" />);
     await waitFor(() => expect(mockListPatience.mock.calls.length).toBeGreaterThanOrEqual(2));
   });

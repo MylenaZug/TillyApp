@@ -16,15 +16,15 @@ import {
 } from "@/lib/tilly/constants";
 import {
   combineLocalDateTime,
-  dateOnlyToISO,
+  dateOnlyToMs,
   formatDuration,
-  nowLocalISO,
+  nowMinute,
   stoolConsistency,
   toLocalDateValue,
   toLocalInputValue,
   toLocalTimeValue,
 } from "@/lib/tilly/helpers";
-import { aloneDurationMs, localDateTimeToIso, MIN_ALONE_DURATION_MS, roundToMinute } from "@/lib/tilly/alone";
+import { aloneDurationMs, localDateTimeToMs, MIN_ALONE_DURATION_MS, roundToMinute } from "@/lib/tilly/alone";
 import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, Chip, FieldLabel, PrimaryButton, StarRow, TextArea, TextInput } from "./ui";
 
@@ -57,12 +57,21 @@ export function EntryForm({
   foodPlanSlots: FoodPlanSlots;
   onFoodPlanSlotsChange: (slots: FoodPlanSlots) => void;
   foodPlanStatus: string;
-  onSave: (data: Record<string, unknown>) => void;
+  onSave: (data: Record<string, unknown>, range: { startAt: number; endAt: number }) => void;
   onDelete: (() => void) | null;
   onCancel: () => void;
 }) {
   const meta = catMeta(categoryId);
-  const [date, setDate] = useState(existing ? existing.date : nowLocalISO());
+  // Datum und Uhrzeit roh halten: Wird ein Feld geleert, bleibt das andere erhalten und das
+  // Formular laesst sich weiter bearbeiten; gespeichert wird nur bei gueltiger Kombination.
+  const initialAt = existing ? existing.startAt : nowMinute();
+  const [dayInput, setDayInput] = useState(toLocalDateValue(initialAt));
+  const [timeInput, setTimeInput] = useState(toLocalTimeValue(initialAt));
+  const date = !dayInput
+    ? Number.NaN
+    : CATEGORIES_WITH_TIME.includes(categoryId)
+      ? combineLocalDateTime(dayInput, timeInput)
+      : dateOnlyToMs(dayInput);
 
   const [consistency, setConsistency] = useState<string[]>(existing ? stoolConsistency(existing) : []);
   const [stoolAmount, setStoolAmount] = useState(existing?.stoolAmount || STOOL_AMOUNTS[1]);
@@ -98,8 +107,8 @@ export function EntryForm({
   const [folgsamkeit, setFolgsamkeit] = useState(existing?.folgsamkeit || 0);
   const [energie, setEnergie] = useState(existing?.energie || 0);
 
-  const aloneInitialStart = existing?.startDatetime || existing?.date || nowLocalISO();
-  const aloneInitialEnd = existing?.endDatetime || existing?.date || nowLocalISO();
+  const aloneInitialStart = existing?.startAt ?? nowMinute();
+  const aloneInitialEnd = existing?.endAt ?? nowMinute();
   const [aloneStartInput, setAloneStartInput] = useState(toLocalInputValue(aloneInitialStart));
   const [aloneEndInput, setAloneEndInput] = useState(toLocalInputValue(aloneInitialEnd));
   // Start und Ende sind "YYYY-MM-DDTHH:mm"-Werte; Datum und Uhrzeit werden getrennt bearbeitet
@@ -109,20 +118,21 @@ export function EntryForm({
   // Von-Tag mit; die Bis-Uhrzeit bleibt, sofern das Ende dann nicht vor dem Start laege.
   const changeAloneStart = (value: string) => {
     setAloneStartInput(value);
-    const start = localDateTimeToIso(value);
-    const end = localDateTimeToIso(aloneEndInput);
+    const start = localDateTimeToMs(value);
+    const end = localDateTimeToMs(aloneEndInput);
     if (!start || !end || new Date(value).getTime() <= new Date(aloneEndInput).getTime()) return;
     const moved = joinDateTime(value.slice(0, 10), aloneEndInput.slice(11, 16));
     setAloneEndInput(new Date(moved).getTime() >= new Date(value).getTime() ? moved : value);
   };
-  const aloneStartedAt = localDateTimeToIso(aloneStartInput);
-  const aloneEndedAt = localDateTimeToIso(aloneEndInput);
+  const aloneStartedAt = localDateTimeToMs(aloneStartInput);
+  const aloneEndedAt = localDateTimeToMs(aloneEndInput);
   const aloneMs = aloneDurationMs(aloneStartedAt, aloneEndedAt);
 
   const [note, setNote] = useState(existing?.note || "");
 
   const canSave =
-    (categoryId === "stool" && consistency.length > 0) ||
+    (categoryId === "alone" || Number.isFinite(date)) &&
+    ((categoryId === "stool" && consistency.length > 0) ||
     (categoryId === "training" && activity.trim().length > 0) ||
     (categoryId === "weight" && kg.trim().length > 0 && !Number.isNaN(Number(kg))) ||
     (categoryId === "food" && food.trim().length > 0) ||
@@ -131,10 +141,11 @@ export function EntryForm({
     (categoryId === "stress" && level > 0) ||
     (categoryId === "kosten" && kostenAmount.trim().length > 0 && !Number.isNaN(Number(kostenAmount))) ||
     categoryId === "tagescheck" ||
-    (categoryId === "alone" && aloneMs >= MIN_ALONE_DURATION_MS);
+    (categoryId === "alone" && aloneMs >= MIN_ALONE_DURATION_MS));
 
   const handleSave = () => {
-    const base = { date, note: note.trim() };
+    const base = { note: note.trim() };
+    let range = { startAt: date, endAt: date };
     let data: Record<string, unknown> = base;
     if (categoryId === "stool") data = { ...base, consistency, color, flags, stoolAmount };
     if (categoryId === "training") data = { ...base, activity: activity.trim(), dogStars, trainerStars };
@@ -154,11 +165,10 @@ export function EntryForm({
     if (categoryId === "kosten") data = { ...base, category: kostenCategory, amount: Number(kostenAmount) };
     if (categoryId === "tagescheck") data = { ...base, folgsamkeit, energie };
     if (categoryId === "alone") {
-      const startDatetime = roundToMinute(aloneStartedAt!);
-      const endDatetime = roundToMinute(aloneEndedAt!);
-      data = { startDatetime, endDatetime, note: note.trim() };
+      range = { startAt: roundToMinute(aloneStartedAt!)!, endAt: roundToMinute(aloneEndedAt!)! };
+      data = { note: note.trim() };
     }
-    onSave(data);
+    onSave(data, range);
   };
 
   const toggleFlag = (f: string) => setFlags((cur) => (cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]));
@@ -223,17 +233,17 @@ export function EntryForm({
             <div className="flex gap-2">
               <TextInput
                 type="date"
-                value={toLocalDateValue(date)}
-                onChange={(e) => setDate(combineLocalDateTime(e.target.value, toLocalTimeValue(date)))}
+                value={dayInput}
+                onChange={(e) => setDayInput(e.target.value)}
               />
               <TextInput
                 type="time"
-                value={toLocalTimeValue(date)}
-                onChange={(e) => setDate(combineLocalDateTime(toLocalDateValue(date), e.target.value))}
+                value={timeInput}
+                onChange={(e) => setTimeInput(e.target.value)}
               />
             </div>
           ) : (
-            <TextInput type="date" value={toLocalDateValue(date)} onChange={(e) => setDate(dateOnlyToISO(e.target.value))} />
+            <TextInput type="date" value={dayInput} onChange={(e) => setDayInput(e.target.value)} />
           )}
         </div>
         )}

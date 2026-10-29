@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { BarChart, Bar, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CHART_COLORS, KOSTEN_CATEGORIES, STOOL_CONSISTENCY, STOOL_FLAGS, WEEKDAYS_DE, catMeta } from "@/lib/tilly/constants";
@@ -11,14 +11,14 @@ import { Chip } from "./ui";
 
 const { hairline: HAIRLINE, inkSoft: INK_SOFT } = CHART_COLORS;
 
-function weekdayIndexMonFirst(d: string) {
+function weekdayIndexMonFirst(d: number) {
   return (new Date(d).getDay() + 6) % 7;
 }
 
 function buildWeekdayCounts(list: AnyEntry[]) {
   const data = WEEKDAYS_DE.map((label) => ({ day: label, Anzahl: 0 }));
   list.forEach((e) => {
-    data[weekdayIndexMonFirst(e.date)].Anzahl += 1;
+    data[weekdayIndexMonFirst(e.startAt)].Anzahl += 1;
   });
   return data;
 }
@@ -90,10 +90,42 @@ function SectionCard({
   );
 }
 
-export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; onAddWeight: () => void }) {
+export function AnalysisView({
+  entries: localEntries,
+  onAddWeight,
+  loadAll,
+}: {
+  entries: AnyEntry[];
+  onAddWeight: () => void;
+  loadAll?: () => Promise<AnyEntry[]>;
+}) {
   const [range, setRange] = useState<number | "all">(7);
+  const [allEntries, setAllEntries] = useState<AnyEntry[] | null>(null);
+  const [allState, setAllState] = useState<"idle" | "loading" | "error">("idle");
 
-  const inRange = (e: AnyEntry) => range === "all" || daysAgo(e.date) <= range;
+  // "Gesamt" geht ueber das lokal geladene Fenster hinaus und holt alles direkt vom Server.
+  useEffect(() => {
+    if (range !== "all" || !loadAll) return;
+    let cancelled = false;
+    setAllState("loading");
+    loadAll().then(
+      (list) => {
+        if (cancelled) return;
+        setAllEntries(list);
+        setAllState("idle");
+      },
+      () => !cancelled && setAllState("error"),
+    );
+    return () => {
+      cancelled = true;
+    };
+    // localEntries: neue, geaenderte oder geloeschte Eintraege machen den Server-Stand ungueltig.
+  }, [range, loadAll, localEntries]);
+
+  // Nach einem Fehler gilt wieder der lokale Bestand, nicht ein veralteter Server-Stand.
+  const entries = range === "all" && allEntries && allState !== "error" ? allEntries : localEntries;
+
+  const inRange = (e: AnyEntry) => range === "all" || daysAgo(e.startAt) <= range;
   const stoolEntries = entries.filter((e) => e.type === "stool" && inRange(e));
   const symptomEntries = entries.filter((e) => e.type === "symptom" && inRange(e));
   const trainingEntries = entries.filter((e) => e.type === "training" && inRange(e));
@@ -105,11 +137,11 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
     total: kostenEntries.filter((e) => e.category === cat).reduce((s, e) => s + (Number(e.amount) || 0), 0),
   })).filter((c) => c.total > 0);
   const aloneEntries = entries.filter((e) => e.type === "alone" && inRange(e));
-  const aloneTotalMs = aloneEntries.reduce((s, e) => s + aloneDurationMs(e.startDatetime, e.endDatetime), 0);
+  const aloneTotalMs = aloneEntries.reduce((s, e) => s + aloneDurationMs(e.startAt, e.endAt), 0);
   const weightEntries = entries.filter((e) => e.type === "weight" && inRange(e));
   const weightChartData = [...weightEntries]
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .map((e) => ({ date: fmtDate(e.date), kg: e.kg }));
+    .sort((a, b) => a.startAt - b.startAt)
+    .map((e) => ({ date: fmtDate(e.startAt), kg: e.kg }));
   const eur = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 
   const consistencyCounts = STOOL_CONSISTENCY.map((c) => ({
@@ -143,6 +175,10 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
           Gesamt
         </Chip>
       </div>
+      {range === "all" && allState === "loading" && <div className="mb-3 text-xs text-ink-soft">Lädt alle Einträge …</div>}
+      {range === "all" && allState === "error" && (
+        <div className="mb-3 text-xs text-ink-soft">Server nicht erreichbar – es werden nur die lokal geladenen Einträge ausgewertet.</div>
+      )}
 
       <SectionCard title="Stuhlgang" summary={`${stoolEntries.length} Einträge`}>
         {stoolEntries.length === 0 ? (
@@ -213,8 +249,8 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
                   data={[...stressEntries]
-                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                    .map((e) => ({ date: fmtDate(e.date), level: Math.min(3, e.level || 0) }))}
+                    .sort((a, b) => a.startAt - b.startAt)
+                    .map((e) => ({ date: fmtDate(e.startAt), level: Math.min(3, e.level || 0) }))}
                   margin={{ top: 6, right: 6, left: 0, bottom: 0 }}
                 >
                   <CartesianGrid stroke={HAIRLINE} vertical={false} />
@@ -246,7 +282,7 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
 
       <SectionCard
         title="Gewicht"
-        summary={weightEntries.length > 0 ? `${[...weightEntries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].kg} kg` : "–"}
+        summary={weightEntries.length > 0 ? `${[...weightEntries].sort((a, b) => b.startAt - a.startAt)[0].kg} kg` : "–"}
       >
         {weightEntries.length === 0 ? (
           <div className="text-sm text-ink-soft">Keine Einträge in diesem Zeitraum.</div>

@@ -41,7 +41,7 @@ describe("SyncButton", () => {
     vi.useRealTimers();
   });
 
-  const base = { status: "synced" as const, pending: 0, lastSyncAt: Date.now(), syncing: false, syncNow: vi.fn(), userEmail: "a@example.com" };
+  const base = { status: "synced" as const, pending: 0, lastSyncAt: Date.now(), syncing: false, outdated: false, dataVersion: 0, rejected: {}, syncNow: vi.fn(), userEmail: "a@example.com" };
 
   it("beschreibt den Zustand fuer Screenreader", () => {
     let { rerender, unmount } = render(<SyncButton {...base} />);
