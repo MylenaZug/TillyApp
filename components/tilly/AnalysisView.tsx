@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { BarChart, Bar, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CHART_COLORS, KOSTEN_CATEGORIES, STOOL_CONSISTENCY, STOOL_FLAGS, WEEKDAYS_DE, catMeta } from "@/lib/tilly/constants";
@@ -90,8 +90,38 @@ function SectionCard({
   );
 }
 
-export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; onAddWeight: () => void }) {
+export function AnalysisView({
+  entries: localEntries,
+  onAddWeight,
+  loadAll,
+}: {
+  entries: AnyEntry[];
+  onAddWeight: () => void;
+  loadAll?: () => Promise<AnyEntry[]>;
+}) {
   const [range, setRange] = useState<number | "all">(7);
+  const [allEntries, setAllEntries] = useState<AnyEntry[] | null>(null);
+  const [allState, setAllState] = useState<"idle" | "loading" | "error">("idle");
+
+  // "Gesamt" geht ueber das lokal geladene Fenster hinaus und holt alles direkt vom Server.
+  useEffect(() => {
+    if (range !== "all" || !loadAll) return;
+    let cancelled = false;
+    setAllState("loading");
+    loadAll().then(
+      (list) => {
+        if (cancelled) return;
+        setAllEntries(list);
+        setAllState("idle");
+      },
+      () => !cancelled && setAllState("error"),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [range, loadAll]);
+
+  const entries = range === "all" && allEntries ? allEntries : localEntries;
 
   const inRange = (e: AnyEntry) => range === "all" || daysAgo(e.date) <= range;
   const stoolEntries = entries.filter((e) => e.type === "stool" && inRange(e));
@@ -143,6 +173,10 @@ export function AnalysisView({ entries, onAddWeight }: { entries: AnyEntry[]; on
           Gesamt
         </Chip>
       </div>
+      {range === "all" && allState === "loading" && <div className="mb-3 text-xs text-ink-soft">Lädt alle Einträge …</div>}
+      {range === "all" && allState === "error" && (
+        <div className="mb-3 text-xs text-ink-soft">Server nicht erreichbar – es werden nur die lokal geladenen Einträge ausgewertet.</div>
+      )}
 
       <SectionCard title="Stuhlgang" summary={`${stoolEntries.length} Einträge`}>
         {stoolEntries.length === 0 ? (

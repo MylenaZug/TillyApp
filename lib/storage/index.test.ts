@@ -4,12 +4,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/storage/sync", () => ({
   runSync: vi.fn(),
+  notifyStorageChange: vi.fn(),
   onStorageChange: vi.fn(() => () => {}),
   setupAutoSync: vi.fn(() => () => {}),
 }));
 
 import {
   deleteEntry,
+  fetchEntriesSince,
+  getLoadedFrom,
+  loadEntries,
   getKv,
   getPatience,
   getPendingCount,
@@ -141,5 +145,43 @@ describe("ausstehende Aenderungen", () => {
     await setMyPatience("a@example.com", "2026-09-18", 3);
 
     expect(await getPendingCount()).toBe(3);
+  });
+});
+
+describe("Nachladen vom Server", () => {
+  const wire = (id: string, startAt: number) => ({ id, type: "food", data: {}, startAt, endAt: startAt, updatedAt: 1, deleted: false });
+  const respond = (pages: object[]) => {
+    const fetchMock = vi.fn();
+    pages.forEach((p) => fetchMock.mockResolvedValueOnce({ ok: true, json: async () => p }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  };
+
+  it("fetchEntriesSince blaettert durch abgeschnittene Antworten, ohne lokal zu speichern", async () => {
+    respond([
+      { entries: [wire("b", 2000)], truncated: true },
+      { entries: [wire("a", 1000)], truncated: false },
+    ]);
+
+    const list = await fetchEntriesSince(0);
+
+    expect(list.map((e) => e.id).sort()).toEqual(["a", "b"]);
+    expect(await listEntries()).toEqual([]);
+  });
+
+  it("loadEntries ohne bekanntes Fenster tut nichts", async () => {
+    const fetchMock = respond([]);
+    expect(await loadEntries({ from: 0 })).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("loadEntries speichert Eintraege und rueckt loadedFrom vor", async () => {
+    await localDb.applyPull({ protocol: 3, token: 1, full: true, windowStart: 5000, entries: [], kv: [], dailyPatience: [] });
+    respond([{ entries: [wire("old", 1500)], truncated: false }]);
+
+    expect(await loadEntries({ from: 1000 })).toBe(true);
+
+    expect((await listEntries()).map((e) => e.id)).toEqual(["old"]);
+    expect(await getLoadedFrom()).toBe(1000);
   });
 });

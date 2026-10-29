@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BarChart3, BookOpen, Clock3, Images, Plus, X } from "lucide-react";
 import {
   deleteEntry,
   getKv,
+  fetchEntriesSince,
   getLoadedFrom,
   getPatience,
   loadEntries,
@@ -109,6 +110,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     const current = await getLoadedFrom();
     if (current !== null && date.getTime() < current) await loadOlder(date.getTime());
   }
+
+  const loadAllEntries = useCallback(async () => (await fetchEntriesSince(0)).map(parseEntryRecord), []);
 
   async function refresh() {
     setLoadedFrom(await getLoadedFrom());
@@ -408,7 +411,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         {view === "history" && (
           <HistoryView patience={allPatience} loadedFrom={loadedFrom} onLoadOlder={() => loadOlder()} onReachDate={(d) => void ensureLoaded(d)} entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
         )}
-        {view === "analysis" && <AnalysisView entries={entries} onAddWeight={() => openAdd("weight")} />}
+        {view === "analysis" && <AnalysisView entries={entries} loadAll={loadAllEntries} onAddWeight={() => openAdd("weight")} />}
         {view === "gallery" && <GalleryView />}
         {view === "exercises" && (
           <ExercisesView

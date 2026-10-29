@@ -97,6 +97,26 @@ export async function loadEntries(options: { from: number; type?: string }): Pro
   }
 }
 
+/**
+ * Holt alle Eintraege ab `from` direkt vom Server (seitenweise), ohne sie lokal zu speichern -
+ * fuer Auswertungen ueber das lokale Fenster hinaus. Wirft bei Fehlern (z.B. offline).
+ */
+export async function fetchEntriesSince(from: number): Promise<EntryRecord[]> {
+  const result = new Map<string, EntryRecord>();
+  let to = Date.now() + DAY_MS;
+  for (;;) {
+    const query = new URLSearchParams({ from: String(Math.max(0, from)), to: String(to) });
+    const res = await fetch(`/api/entries?${query}`, { credentials: "include", headers: { [SYNC_PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION) } });
+    if (!res.ok) throw new Error(`entries fetch failed: ${res.status}`);
+    const body = (await res.json()) as { entries: WireEntry[]; truncated: boolean };
+    for (const e of body.entries) result.set(e.id, { ...e, deleted: false });
+    const oldest = Math.min(...body.entries.map((e) => e.startAt));
+    if (!body.truncated || oldest >= to) break;
+    to = oldest;
+  }
+  return [...result.values()];
+}
+
 export async function deleteEntry(id: string) {
   const existing = await localDb.getEntry(id);
   if (!existing) return;
