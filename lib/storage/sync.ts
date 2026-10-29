@@ -20,6 +20,8 @@ function notify() {
   listeners.forEach((l) => l());
 }
 
+export const notifyStorageChange = notify;
+
 let clientOutdated = false;
 
 // true, sobald der Server die Protokollversion dieses Clients ablehnt (426): Die App muss neu

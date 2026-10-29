@@ -58,10 +58,12 @@ export function TwoWeekCalendar({
   entries,
   onEdit,
   patience = [],
+  onReachDate,
 }: {
   entries: AnyEntry[];
   onEdit: (entry: AnyEntry) => void;
   patience?: PatienceRecord[];
+  onReachDate?: (date: Date) => void;
 }) {
   const today = startOfDay(new Date());
   const todayKey = dateKey(today);
@@ -89,6 +91,7 @@ export function TwoWeekCalendar({
     const newEnd = new Date(newStart);
     newEnd.setDate(newStart.getDate() + 13);
     setSelected(next === 0 ? todayKey : dateKey(newEnd));
+    onReachDate?.(newStart);
   };
 
   const monthLabel = (() => {

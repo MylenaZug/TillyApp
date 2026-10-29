@@ -1,7 +1,8 @@
 import { localDb } from "./local-db";
-import { onStorageChange, runSync } from "./sync";
+import { notifyStorageChange, runSync } from "./sync";
 import type { EntryRecord, KvRecord, PatienceRecord } from "./types";
 import { legacyRange } from "@/lib/tilly/legacy";
+import { SYNC_PROTOCOL_HEADER, SYNC_PROTOCOL_VERSION, type WireEntry } from "@/lib/tilly/protocol";
 import { parseEntry } from "@/lib/tilly/schemas";
 
 export { getLastSyncAt, isClientOutdated, onStorageChange, runSync, setupAutoSync } from "./sync";
@@ -59,6 +60,41 @@ export async function saveEntry(
   await localDb.enqueueEntry(row);
   void runSync();
   return row;
+}
+
+/** Fruehester Zeitpunkt, ab dem Eintraege lokal vollstaendig vorliegen (null: noch nicht synchronisiert). */
+export async function getLoadedFrom(): Promise<number | null> {
+  return (await localDb.getMeta()).loadedFrom;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Laedt Eintraege vom Server nach, die vor dem lokal vorhandenen Fenster liegen. Gibt false
+ * zurueck, wenn das nicht geklappt hat (z.B. offline) - die App arbeitet dann mit dem Stand weiter.
+ * Ohne `type` rueckt das Fenster nach vorne; mit `type` werden nur Eintraege dieses Typs aus dem
+ * ganzen Zeitraum zusaetzlich abgelegt (Fenster bleibt unveraendert).
+ */
+export async function loadEntries(options: { from: number; type?: string }): Promise<boolean> {
+  const { loadedFrom } = await localDb.getMeta();
+  if (loadedFrom === null && !options.type) return false;
+  const to = options.type ? Date.now() + DAY_MS : loadedFrom!;
+  const from = Math.max(0, options.from);
+  if (to <= from) return true;
+  try {
+    const query = new URLSearchParams({ from: String(from), to: String(to) });
+    if (options.type) query.set("type", options.type);
+    const res = await fetch(`/api/entries?${query}`, { credentials: "include", headers: { [SYNC_PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION) } });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { entries: WireEntry[]; truncated: boolean };
+    // Bei abgeschnittener Antwort reicht das Fenster nur bis zum aeltesten gelieferten Eintrag.
+    const covered = body.truncated ? Math.min(...body.entries.map((e) => e.startAt)) : from;
+    await localDb.putLoadedEntries(body.entries, options.type ? undefined : covered);
+    notifyStorageChange();
+    return !body.truncated;
+  } catch {
+    return false;
+  }
 }
 
 export async function deleteEntry(id: string) {

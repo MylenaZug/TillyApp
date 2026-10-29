@@ -5,7 +5,9 @@ import { BarChart3, BookOpen, Clock3, Images, Plus, X } from "lucide-react";
 import {
   deleteEntry,
   getKv,
+  getLoadedFrom,
   getPatience,
+  loadEntries,
   listPatience,
   listEntries,
   saveEntry,
@@ -92,7 +94,24 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   const sync = useSyncStatus();
 
+  const [loadedFrom, setLoadedFrom] = useState<number | null>(null);
+
+  async function loadOlder(from?: number) {
+    const current = await getLoadedFrom();
+    if (current === null) return false;
+    const ok = await loadEntries({ from: from ?? current - 30 * 24 * 60 * 60 * 1000 });
+    await refresh();
+    return ok;
+  }
+
+  // Beim Zurueckblaettern im Kalender bei Bedarf nachladen.
+  async function ensureLoaded(date: Date) {
+    const current = await getLoadedFrom();
+    if (current !== null && date.getTime() < current) await loadOlder(date.getTime());
+  }
+
   async function refresh() {
+    setLoadedFrom(await getLoadedFrom());
     const records = await listEntries();
     const parsed = records.map(parseEntryRecord).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setEntries(parsed);
@@ -129,6 +148,13 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail]);
+
+  // Die Uebungen zeigen die letzten Trainings - auch die, die ausserhalb des Startfensters liegen.
+  useEffect(() => {
+    if (view !== "exercises") return;
+    void loadEntries({ from: 0, type: "training" }).then(refresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   // Geduld der anderen kommt per Sync - nach jedem erfolgreichen Sync neu einlesen.
   useEffect(() => {
@@ -380,7 +406,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           />
         )}
         {view === "history" && (
-          <HistoryView patience={allPatience} entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
+          <HistoryView patience={allPatience} loadedFrom={loadedFrom} onLoadOlder={() => loadOlder()} onReachDate={(d) => void ensureLoaded(d)} entries={entries} filter={historyFilter} setFilter={setHistoryFilter} onEdit={(entry) => openAdd(entry.type, entry)} />
         )}
         {view === "analysis" && <AnalysisView entries={entries} onAddWeight={() => openAdd("weight")} />}
         {view === "gallery" && <GalleryView />}

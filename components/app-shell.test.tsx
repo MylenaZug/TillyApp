@@ -23,6 +23,8 @@ vi.mock("@/lib/storage", () => ({
   getPatience: (userEmail: string, date: string) => mockGetPatience(userEmail, date),
   getKv: (key: string) => mockGetKv(key),
   setKv: (...args: unknown[]) => mockSetKv(...args),
+  getLoadedFrom: async () => null,
+  loadEntries: async () => false,
 }));
 vi.mock("@/lib/storage/useSyncStatus", () => ({
   useSyncStatus: () => mockUseSyncStatus(),

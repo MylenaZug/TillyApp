@@ -1,5 +1,5 @@
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { SyncPullResponse } from "@/lib/tilly/protocol";
+import type { SyncPullResponse, WireEntry } from "@/lib/tilly/protocol";
 import type { EntryRecord, KvRecord, PatienceRecord, PendingPatience, PendingQueue, SyncMeta } from "./types";
 
 // Objekt-Stores statt einer grossen Map: Eintraege sind ueber Zeit-Indizes abfragbar, und ein
@@ -127,6 +127,33 @@ export const localDb = {
   async resetSyncState() {
     const db = await open();
     await db.delete("meta", "token");
+  },
+
+  /**
+   * Speichert nachgeladene Eintraege (ohne noch nicht gesendete lokale Aenderungen zu ueberschreiben)
+   * und setzt optional `loadedFrom` nach vorne.
+   */
+  async putLoadedEntries(rows: WireEntry[], loadedFrom?: number) {
+    const db = await open();
+    const tx = db.transaction(["entries", "queueEntries", "meta"], "readwrite");
+    const queued = new Set(await tx.objectStore("queueEntries").getAllKeys());
+    for (const row of rows) {
+      if (queued.has(row.id) || row.deleted) continue;
+      await tx.objectStore("entries").put({
+        id: row.id,
+        type: row.type,
+        data: row.data,
+        startAt: row.startAt,
+        endAt: row.endAt,
+        updatedAt: row.updatedAt,
+        deleted: false,
+      });
+    }
+    if (loadedFrom !== undefined) {
+      const current = (await tx.objectStore("meta").get("loadedFrom")) as number | undefined;
+      if (current === undefined || loadedFrom < current) await tx.objectStore("meta").put(loadedFrom, "loadedFrom");
+    }
+    await tx.done;
   },
 
   /**
