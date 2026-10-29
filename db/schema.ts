@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
 
 /**
  * Einzige Modell-Definition fuer die App - Typen hieraus werden sowohl in den
@@ -43,14 +43,20 @@ export const dailyPatience = sqliteTable(
 
 // Die Bilddatei selbst liegt nicht in der DB, sondern unter UPLOADS_DIR auf der Platte
 // (siehe app/api/photos) - hier nur Metadaten, damit die Galerie schnell laden kann.
-export const photos = sqliteTable("photos", {
-  id: text("id").primaryKey(),
-  filename: text("filename").notNull(),
-  note: text("note"),
-  uploadedBy: text("uploaded_by").notNull(),
-  createdAt: integer("created_at").notNull(),
-  deleted: integer("deleted").notNull().default(0),
-});
+export const photos = sqliteTable(
+  "photos",
+  {
+    id: text("id").primaryKey(),
+    filename: text("filename").notNull(),
+    note: text("note"),
+    uploadedBy: text("uploaded_by").notNull(),
+    createdAt: integer("created_at").notNull(),
+    deleted: integer("deleted").notNull().default(0),
+  },
+  (table) => ({
+    createdAtIdx: index("photos_created_at_idx").on(table.createdAt),
+  })
+);
 
 export type KvRow = typeof kvStore.$inferSelect;
 export type EntryRow = typeof entries.$inferSelect;
