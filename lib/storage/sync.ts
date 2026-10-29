@@ -104,16 +104,43 @@ export async function runSync() {
   }
 }
 
+const DEFERRED_SYNC_MS = 5000;
+let deferredTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Fuer Tipp-Felder: viele Aenderungen in kurzer Zeit werden zu einem einzigen Sync gebuendelt. */
+export function scheduleSync(delayMs = DEFERRED_SYNC_MS) {
+  if (deferredTimer) clearTimeout(deferredTimer);
+  deferredTimer = setTimeout(() => {
+    deferredTimer = null;
+    void runSync();
+  }, delayMs);
+}
+
+/** Sendet einen ausstehenden verzoegerten Sync sofort (z.B. beim Verlassen der Seite). */
+export function flushScheduledSync() {
+  if (!deferredTimer) return;
+  clearTimeout(deferredTimer);
+  deferredTimer = null;
+  void runSync();
+}
+
 export function setupAutoSync() {
   if (typeof window === "undefined") return () => {};
   const trigger = () => void runSync();
   window.addEventListener("online", trigger);
   window.addEventListener("focus", trigger);
+  const flush = () => {
+    if (document.visibilityState === "hidden") flushScheduledSync();
+  };
+  document.addEventListener("visibilitychange", flush);
+  window.addEventListener("pagehide", flushScheduledSync);
   const interval = setInterval(trigger, 2 * 60 * 1000);
   trigger();
   return () => {
     window.removeEventListener("online", trigger);
     window.removeEventListener("focus", trigger);
+    document.removeEventListener("visibilitychange", flush);
+    window.removeEventListener("pagehide", flushScheduledSync);
     clearInterval(interval);
   };
 }

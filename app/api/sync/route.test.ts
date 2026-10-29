@@ -97,6 +97,16 @@ describe("POST /api/sync", () => {
     expect(row.server_seq).toBe(2);
   });
 
+  it("vergibt für unveränderte Daten keine neue server_seq (Eintrag, Einstellung, Geduld)", async () => {
+    const payload = { kv: [{ key: "general-note", value: "Hallo" }], entries: [stress("a", 1000)], dailyPatience: [{ date: "2026-09-18", geduld: 3 }] };
+    const first = await (await post(payload)).json();
+    const second = await (await post(payload)).json();
+    expect(second.token).toBe(first.token);
+
+    const changed = await (await post({ kv: [{ key: "general-note", value: "Hallo Welt" }] })).json();
+    expect(changed.token).toBe(first.token + 1);
+  });
+
   it("meldet ungültige Einträge in rejected und speichert die übrigen", async () => {
     const res = await post({
       entries: [

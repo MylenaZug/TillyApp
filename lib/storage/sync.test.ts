@@ -151,3 +151,38 @@ describe("runSync", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+// setImmediate bleibt echt, damit fake-indexeddb im runSync durchlaeuft.
+const settle = async () => {
+  for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+};
+
+describe("scheduleSync", () => {
+  it("bündelt mehrere Aufrufe zu einem Sync und flush sendet sofort", async () => {
+    // Frisches Modul: der 426-Test oben setzt "veraltet" dauerhaft.
+    vi.resetModules();
+    const { flushScheduledSync, scheduleSync } = await import("@/lib/storage/sync");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => pull() });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      scheduleSync(1000);
+      scheduleSync(1000);
+      await vi.advanceTimersByTimeAsync(999);
+      expect(fetchMock).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(2);
+      await settle();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      fetchMock.mockClear();
+      scheduleSync(60_000);
+      flushScheduledSync();
+      await settle();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(61_000);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

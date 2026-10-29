@@ -141,7 +141,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     if (s) setSymptomTypes(JSON.parse(s));
     // Eine gerade getippte Notiz nicht durch den Serverstand ueberschreiben.
     if (gn && !(afterSync && noteTimerRef.current)) setGeneralNote(gn);
-    if (fp) setFoodPlan(fp);
+    if (fp && !(afterSync && foodPlanTimerRef.current)) setFoodPlan(fp);
     if (fps) setFoodPlanSlots(JSON.parse(fps));
     if (as) setAloneStart(as);
     // Standanduebungen kommen als DB-Seed (siehe db/seed.ts) bereits befuellt aus dem
@@ -268,7 +268,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     noteTimerRef.current = setTimeout(async () => {
       try {
         noteTimerRef.current = null;
-        await setKv("general-note", text);
+        await setKv("general-note", text, { deferSync: true });
         setNoteStatus("saved");
         setTimeout(() => setNoteStatus(""), 1500);
       } catch {
@@ -283,7 +283,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     if (foodPlanTimerRef.current) clearTimeout(foodPlanTimerRef.current);
     foodPlanTimerRef.current = setTimeout(async () => {
       try {
-        await setKv("food-plan", text);
+        foodPlanTimerRef.current = null;
+        await setKv("food-plan", text, { deferSync: true });
         setFoodPlanStatus("saved");
         setTimeout(() => setFoodPlanStatus(""), 1500);
       } catch {

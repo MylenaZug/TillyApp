@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/storage/sync", () => ({
   runSync: vi.fn(),
   notifyStorageChange: vi.fn(),
+  scheduleSync: vi.fn(),
   onStorageChange: vi.fn(() => () => {}),
   setupAutoSync: vi.fn(() => () => {}),
 }));
@@ -22,6 +23,7 @@ import {
   setKv,
   setMyPatience,
 } from "@/lib/storage";
+import { runSync, scheduleSync } from "@/lib/storage/sync";
 import { localDb, resetLocalDb } from "@/lib/storage/local-db";
 
 beforeEach(async () => {
@@ -183,5 +185,20 @@ describe("Nachladen vom Server", () => {
 
     expect((await listEntries()).map((e) => e.id)).toEqual(["old"]);
     expect(await getLoadedFrom()).toBe(1000);
+  });
+});
+
+describe("setKv mit deferSync", () => {
+  it("sendet nicht sofort, sondern plant den Sync", async () => {
+    vi.mocked(runSync).mockClear();
+    vi.mocked(scheduleSync).mockClear();
+
+    await setKv("general-note", "Hallo", { deferSync: true });
+    expect(scheduleSync).toHaveBeenCalledTimes(1);
+    expect(runSync).not.toHaveBeenCalled();
+    expect(await getKv("general-note")).toBe("Hallo");
+
+    await setKv("food-types", "[]");
+    expect(runSync).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,11 +1,11 @@
 import { localDb } from "./local-db";
-import { notifyStorageChange, runSync } from "./sync";
+import { notifyStorageChange, runSync, scheduleSync } from "./sync";
 import type { EntryRecord, KvRecord, PatienceRecord } from "./types";
 import { legacyRange } from "@/lib/tilly/legacy";
 import { SYNC_PROTOCOL_HEADER, SYNC_PROTOCOL_VERSION, type WireEntry } from "@/lib/tilly/protocol";
 import { parseEntry } from "@/lib/tilly/schemas";
 
-export { getLastSyncAt, isClientOutdated, onStorageChange, runSync, setupAutoSync } from "./sync";
+export { flushScheduledSync, getLastSyncAt, isClientOutdated, onStorageChange, runSync, setupAutoSync } from "./sync";
 
 function now() {
   return Date.now();
@@ -21,11 +21,13 @@ export async function getKv(key: string): Promise<string | null> {
   return (await localDb.getKv(key))?.value ?? null;
 }
 
-export async function setKv(key: string, value: string) {
+/** `deferSync`: fuer Tipp-Felder - lokal sofort, Netz erst nach einer Ruhepause (oder beim Verlassen der Seite). */
+export async function setKv(key: string, value: string, options?: { deferSync?: boolean }) {
   const row: KvRecord = { key, value, updatedAt: now() };
   await localDb.putKv(row);
   await localDb.enqueueKv(row);
-  void runSync();
+  if (options?.deferSync) scheduleSync();
+  else void runSync();
 }
 
 // ---- entries (Futter/Stuhlgang/Training/Stress/Symptom/Gewicht/Tierarzt/Kosten/Tagescheck/Alleine) ----

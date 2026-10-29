@@ -105,6 +105,8 @@ export async function POST(request: NextRequest) {
         rejected.push({ kind: "kv", id: idOf(item, "key"), error: parsed.error.message });
         continue;
       }
+      // Unveraenderte Werte (Wiederholung, Doppelsendung) vergeben keine neue Sync-Nummer.
+      if (tx.select().from(kvStore).where(eq(kvStore.key, parsed.data.key)).get()?.value === parsed.data.value) continue;
       const values = { ...parsed.data, updatedAt: Date.now(), serverSeq: nextSeq(tx) };
       tx.insert(kvStore)
         .values(values)
@@ -124,10 +126,22 @@ export async function POST(request: NextRequest) {
         rejected.push({ kind: "entry", id, error: parsed.error });
         continue;
       }
+      const dataJson = JSON.stringify(parsed.data);
+      const existing = tx.select().from(entries).where(eq(entries.id, id)).get();
+      if (
+        existing &&
+        existing.type === type &&
+        existing.data === dataJson &&
+        existing.startAt === parsed.startAt &&
+        existing.endAt === parsed.endAt &&
+        existing.deleted === (deleted ? 1 : 0)
+      ) {
+        continue;
+      }
       const values = {
         id,
         type,
-        data: JSON.stringify(parsed.data),
+        data: dataJson,
         startAt: parsed.startAt,
         endAt: parsed.endAt,
         updatedAt: Date.now(),
@@ -145,6 +159,12 @@ export async function POST(request: NextRequest) {
         rejected.push({ kind: "dailyPatience", id: idOf(item, "date"), error: parsed.error.message });
         continue;
       }
+      const existing = tx
+        .select()
+        .from(dailyPatience)
+        .where(and(eq(dailyPatience.userEmail, userEmail), eq(dailyPatience.date, parsed.data.date)))
+        .get();
+      if (existing?.geduld === parsed.data.geduld) continue;
       const values = { userEmail, ...parsed.data, updatedAt: Date.now(), serverSeq: nextSeq(tx) };
       tx.insert(dailyPatience)
         .values(values)
