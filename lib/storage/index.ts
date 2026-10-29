@@ -1,7 +1,6 @@
 import { localDb } from "./local-db";
 import { notifyStorageChange, runSync, scheduleSync } from "./sync";
 import type { EntryRecord, KvRecord, PatienceRecord } from "./types";
-import { legacyRange } from "@/lib/tilly/legacy";
 import { SYNC_PROTOCOL_HEADER, SYNC_PROTOCOL_VERSION, type WireEntry } from "@/lib/tilly/protocol";
 import { parseEntry } from "@/lib/tilly/schemas";
 
@@ -41,18 +40,14 @@ export async function listEntries(): Promise<EntryRecord[]> {
   return localDb.listEntries();
 }
 
-/**
- * Speichert einen Eintrag lokal und reiht ihn fuer den Sync ein. Der Zeitraum kommt aus `range`
- * oder (bis die Formulare ihn direkt liefern) aus data.date bzw. startDatetime/endDatetime.
- */
+/** Speichert einen Eintrag lokal und reiht ihn fuer den Sync ein. */
 export async function saveEntry(
   id: string | undefined,
   type: string,
   data: Record<string, unknown>,
-  range?: { startAt: number; endAt: number }
+  range: { startAt: number; endAt: number }
 ): Promise<EntryRecord> {
-  const times = range ?? legacyRange(type, data);
-  const parsed = parseEntry({ type, startAt: times.startAt, endAt: times.endAt, data });
+  const parsed = parseEntry({ type, startAt: range.startAt, endAt: range.endAt, data });
   if (!parsed.ok) throw new Error(`Eintrag ungueltig: ${parsed.error}`);
   const row: EntryRecord = {
     id: id || uid(),

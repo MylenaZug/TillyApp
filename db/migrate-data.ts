@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { legacyRange, normalizeLegacyData } from "../lib/tilly/legacy";
+import { legacyRange, normalizeLegacyData } from "./legacy";
 import { parseEntry } from "../lib/tilly/schemas";
 
 type LegacyRow = { id: string; type: string; data: string; start_at: number; end_at: number };

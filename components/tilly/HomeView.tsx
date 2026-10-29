@@ -48,7 +48,7 @@ export function HomeView({
   noteStatus: string;
   foodPlanSlots: FoodPlanSlots;
   onConfirmFoodSlot: (daytime: string) => void;
-  aloneStart: string | null;
+  aloneStart: number | null;
   onStartAlone: () => void;
   onStopAlone: () => void;
   onEditEntry: (entry: AnyEntry) => void;
@@ -56,13 +56,13 @@ export function HomeView({
   const todayKey = dateKey(new Date());
   const yesterdayKey = dateKey(dateForOffset(1));
   // Nur der gestrige Eintrag zaehlt: hoher Stress gestern -> heute als Ruhetag vorschlagen
-  const yesterdayStress = entries.find((e) => e.type === "stress" && dateKey(e.date) === yesterdayKey);
+  const yesterdayStress = entries.find((e) => e.type === "stress" && dateKey(e.startAt) === yesterdayKey);
   const showStressAlert = !!yesterdayStress && (yesterdayStress.level || 0) >= 2;
   const stressLabel = yesterdayStress ? stressLabelFor(yesterdayStress.level || 0) : "";
 
-  const showWeightReminder = !entries.some((e) => e.type === "weight" && dateKey(e.date) === todayKey);
+  const showWeightReminder = !entries.some((e) => e.type === "weight" && dateKey(e.startAt) === todayKey);
 
-  const todayFoodEntries = entries.filter((e) => e.type === "food" && dateKey(e.date) === todayKey);
+  const todayFoodEntries = entries.filter((e) => e.type === "food" && dateKey(e.startAt) === todayKey);
   const foodSlotsToday = DAYTIME_OPTIONS.filter((d) => foodPlanSlots[d]?.food?.trim());
 
   // Erzwingt jede Sekunde einen Re-Render, waehrend der Alleine-Timer laeuft, damit die
@@ -87,13 +87,13 @@ export function HomeView({
         return acc;
       }, {}),
   ).sort((a, b) => patienceName(a).localeCompare(patienceName(b)));
-  const aloneElapsedMs = aloneStart ? Date.now() - new Date(aloneStart).getTime() : 0;
-  const aloneLast = [...entries].filter((e) => e.type === "alone").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  const aloneElapsedMs = aloneStart ? Date.now() - aloneStart : 0;
+  const aloneLast = [...entries].filter((e) => e.type === "alone").sort((a, b) => b.startAt - a.startAt)[0];
 
   // Tagescheck steckt schon in der "Heute"-Karte und taucht hier deshalb nicht noch einmal auf.
   const todayEntries = entries
-    .filter((e) => e.type !== "tagescheck" && dateKey(e.date) === todayKey)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .filter((e) => e.type !== "tagescheck" && dateKey(e.startAt) === todayKey)
+    .sort((a, b) => b.startAt - a.startAt);
 
   const aloneCard = (
     <div className="mb-4 rounded-2xl border border-hairline bg-card p-4">
@@ -112,7 +112,7 @@ export function HomeView({
           <div className="min-w-0 text-sm text-ink-soft">
             {aloneLast ? (
               <button onClick={() => onEditEntry(aloneLast)} className="text-left underline decoration-hairline underline-offset-2">
-                Zuletzt: {entrySummary(aloneLast) || fmtDateTime(aloneLast.date)}
+                Zuletzt: {entrySummary(aloneLast) || fmtDateTime(aloneLast.startAt)}
               </button>
             ) : (
               "Noch nicht erfasst"

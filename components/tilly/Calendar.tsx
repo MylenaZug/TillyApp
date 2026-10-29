@@ -22,7 +22,7 @@ export function DayRow({ entry, onClick }: { entry: AnyEntry; onClick?: (entry: 
         <div className="flex items-center gap-1.5" aria-label={meta.label} title={meta.label}>
           <CatIcon cat={meta} size={13} />
         </div>
-        {showTime && <span className="text-[11px] text-ink-soft">{fmtTime(entry.date)}</span>}
+        {showTime && <span className="text-[11px] text-ink-soft">{fmtTime(entry.startAt)}</span>}
       </div>
       {entrySummary(entry) && <div className="mt-0.5 break-words text-[13px] text-ink-soft">{entrySummary(entry)}</div>}
       {entry.note && <div className="mt-1 break-words text-[12px] italic text-ink-soft">„{entry.note}"</div>}
@@ -107,7 +107,7 @@ export function TwoWeekCalendar({
   const catsForKey = (key: string) => {
     const ids: string[] = [];
     entries.forEach((e) => {
-      if (CALENDAR_CATEGORY_IDS.includes(e.type) && dateKey(e.date) === key && !ids.includes(e.type)) ids.push(e.type);
+      if (CALENDAR_CATEGORY_IDS.includes(e.type) && dateKey(e.startAt) === key && !ids.includes(e.type)) ids.push(e.type);
     });
     return ids;
   };
@@ -120,7 +120,7 @@ export function TwoWeekCalendar({
       : selected === yesterdayKey
         ? "Gestern"
         : `${selectedDate.toLocaleDateString("de-DE", { weekday: "long" })}, ${selectedDate.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}`;
-  const selectedEntries = entries.filter((e) => dateKey(e.date) === selected);
+  const selectedEntries = entries.filter((e) => dateKey(e.startAt) === selected);
   const selectedPatience = patience.filter((r) => r.date === selected && r.geduld > 0);
 
   return (
@@ -230,8 +230,8 @@ export function TimelineRow({ entry, onClick, rejection }: { entry: AnyEntry; on
           <span className="text-sm font-medium text-ink">{meta.label}</span>
           <span className="text-[11px] text-ink-soft">
             {CATEGORIES_WITH_TIME.includes(entry.type)
-              ? new Date(entry.date).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-              : new Date(entry.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+              ? new Date(entry.startAt).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+              : new Date(entry.startAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}
           </span>
         </div>
         {entrySummary(entry) && <div className="mt-0.5 break-words text-[13px] text-ink-soft">{entrySummary(entry)}</div>}

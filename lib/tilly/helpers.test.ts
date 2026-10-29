@@ -3,7 +3,7 @@ import type { AnyEntry } from "@/lib/tilly/types";
 import {
   combineLocalDateTime,
   dateKey,
-  dateOnlyToISO,
+  dateOnlyToMs,
   entrySummary,
   formatDuration,
   startOfDay,
@@ -11,7 +11,7 @@ import {
   toLocalTimeValue,
 } from "@/lib/tilly/helpers";
 
-const alone = (o: object) => ({ id: "1", type: "alone", date: "2026-01-01T10:00:00.000Z", ...o }) as unknown as AnyEntry;
+const alone = (o: object) => ({ id: "1", type: "alone", startAt: 0, endAt: 0, ...o }) as unknown as AnyEntry;
 
 describe("formatDuration", () => {
   it("zeigt Minuten unter einer Stunde und Stunden plus Minuten darueber", () => {
@@ -27,20 +27,15 @@ describe("formatDuration", () => {
 });
 
 describe("entrySummary fuer Alleine-Eintraege", () => {
-  const start = new Date(2026, 0, 1, 9, 0).toISOString();
-  const end = new Date(2026, 0, 1, 10, 30).toISOString();
+  const start = new Date(2026, 0, 1, 9, 0).getTime();
+  const end = new Date(2026, 0, 1, 10, 30).getTime();
 
-  it("zeigt Dauer und Uhrzeiten von-bis aus den separaten Zeitpunkten", () => {
-    expect(entrySummary(alone({ startDatetime: start, endDatetime: end }))).toBe("1 Std 30 Min · 09:00–10:30 Uhr");
+  it("zeigt Dauer und Uhrzeiten von-bis aus startAt und endAt", () => {
+    expect(entrySummary(alone({ startAt: start, endAt: end }))).toBe("1 Std 30 Min · 09:00–10:30 Uhr");
   });
 
   it("akzeptiert eine Dauer von 0 als gueltigen Wert", () => {
-    expect(entrySummary(alone({ startDatetime: start, endDatetime: start }))).toContain("0 Min");
-  });
-
-  it("zeigt bei fehlenden Feldern keinen Platzhalter-Text", () => {
-    expect(entrySummary(alone({ endDatetime: end }))).toBe("");
-    expect(entrySummary(alone({ startDatetime: start }))).toBe("");
+    expect(entrySummary(alone({ startAt: start, endAt: start }))).toContain("0 Min");
   });
 });
 
@@ -73,7 +68,7 @@ describe("Datum/Uhrzeit-Helfer", () => {
   });
 
   it("legt reine Datumswerte auf 12:00 lokal, damit Zeitzonen den Tag nicht verschieben", () => {
-    const iso = dateOnlyToISO("2026-03-05");
+    const iso = dateOnlyToMs("2026-03-05");
     expect(toLocalDateValue(iso)).toBe("2026-03-05");
     expect(toLocalTimeValue(iso)).toBe("12:00");
   });

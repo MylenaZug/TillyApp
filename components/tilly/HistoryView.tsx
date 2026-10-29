@@ -33,7 +33,7 @@ export function HistoryView({
   const [loading, setLoading] = useState(false);
   const filtered = filter === "all" ? entries : entries.filter((e) => e.type === filter);
   type Item = { key: string; at: number; entry?: AnyEntry; patience?: PatienceRecord };
-  const items: Item[] = filtered.map((e) => ({ key: e.id, at: new Date(e.date).getTime(), entry: e }));
+  const items: Item[] = filtered.map((e) => ({ key: e.id, at: e.startAt, entry: e }));
   if (filter === "all") {
     for (const r of patience) {
       if (r.geduld > 0) items.push({ key: `p:${r.userEmail}:${r.date}`, at: new Date(`${r.date}T23:59:00`).getTime(), patience: r });

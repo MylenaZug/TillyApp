@@ -1,6 +1,9 @@
-import { LEGACY_STOOL_CONSISTENCY, STRESS_LEVELS, TILLY_BIRTHDATE } from "./constants";
+import { STRESS_LEVELS, TILLY_BIRTHDATE } from "./constants";
 import { aloneDurationMs } from "./alone";
 import type { AnyEntry } from "./types";
+
+// Zeitpunkte sind Epoch-ms (startAt/endAt); Date und ISO-String bleiben fuer Formularwerte erlaubt.
+export type TimeInput = number | string | Date;
 
 export const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -34,20 +37,20 @@ export function tillyAge(): string {
   return parts.join(", ") + " alt";
 }
 
-export const fmtDateTime = (iso: string) =>
+export const fmtDateTime = (iso: TimeInput) =>
   new Date(iso).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-export const fmtDate = (iso: string) =>
+export const fmtDate = (iso: TimeInput) =>
   new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
-export const fmtTime = (iso: string) =>
+export const fmtTime = (iso: TimeInput) =>
   new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 
-export const startOfDay = (d: Date | string) => {
+export const startOfDay = (d: TimeInput) => {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
 };
 
-export const daysAgo = (iso: string) =>
+export const daysAgo = (iso: TimeInput) =>
   Math.floor((startOfDay(new Date()).getTime() - startOfDay(new Date(iso)).getTime()) / 86400000);
 
 export function dateForOffset(offset: number) {
@@ -56,17 +59,17 @@ export function dateForOffset(offset: number) {
   return d;
 }
 
-export function dayLabel(iso: string) {
+export function dayLabel(iso: TimeInput) {
   const d = daysAgo(iso);
   if (d === 0) return "Heute";
   if (d === 1) return "Gestern";
   return new Date(iso).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
 }
 
-export function groupByDay<T extends { date: string }>(list: T[]) {
+export function groupByDay<T extends { startAt: number }>(list: T[]) {
   const groups: { label: string; items: T[] }[] = [];
   list.forEach((e) => {
-    const label = dayLabel(e.date);
+    const label = dayLabel(e.startAt);
     let g = groups.find((group) => group.label === label);
     if (!g) {
       g = { label, items: [] };
@@ -83,12 +86,8 @@ export function stressLabelFor(level: number) {
   return STRESS_LEVELS[clamped - 1]?.label || "";
 }
 
-// consistency war frueher ein einzelner String, heute ein Array - und alte Bezeichnungen
-// werden auf die aktuellen gemappt (siehe LEGACY_STOOL_CONSISTENCY).
 export function stoolConsistency(entry: AnyEntry): string[] {
-  const raw = entry.consistency as unknown as string | string[] | undefined;
-  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
-  return [...new Set(list.map((c) => LEGACY_STOOL_CONSISTENCY[c] ?? c))];
+  return Array.isArray(entry.consistency) ? entry.consistency : [];
 }
 
 export function starGlyphs(n?: number) {
@@ -111,7 +110,7 @@ export function formatDuration(ms: number): string {
 export function weightFeedback(kg: number, daytime: string | undefined, previousWeightEntries: AnyEntry[]): string {
   if (previousWeightEntries.length === 0) return "erster Eintrag";
 
-  const sorted = [...previousWeightEntries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sorted = [...previousWeightEntries].sort((a, b) => b.startAt - a.startAt);
   const sameDaytime = daytime ? sorted.find((e) => e.daytime === daytime) : undefined;
   const reference = sameDaytime || sorted[0];
   const delta = kg - (Number(reference.kg) || 0);
@@ -123,45 +122,45 @@ export function weightFeedback(kg: number, daytime: string | undefined, previous
         ? `${delta.toFixed(1)} kg zugenommen`
         : `${Math.abs(delta).toFixed(1)} kg abgenommen`;
 
-  const refLabel = reference.daytime ? `${reference.daytime}, ${fmtDate(reference.date)}` : fmtDate(reference.date);
+  const refLabel = reference.daytime ? `${reference.daytime}, ${fmtDate(reference.startAt)}` : fmtDate(reference.startAt);
   const comparableNote = sameDaytime ? "" : " · andere Tageszeit, bedingt vergleichbar";
   return `${trend} seit ${refLabel}${comparableNote}`;
 }
 
-export function nowLocalISO() {
+export function nowMinute() {
   const d = new Date();
   d.setSeconds(0, 0);
-  return d.toISOString();
+  return d.getTime();
 }
 
 // datetime-local braucht lokale Zeit als String (YYYY-MM-DDTHH:mm),
 // nicht UTC - sonst verschiebt sich die Anzeige um die Zeitzonen-Differenz.
-export function toLocalInputValue(iso: string) {
+export function toLocalInputValue(iso: TimeInput) {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function toLocalDateValue(iso: string) {
+export function toLocalDateValue(iso: TimeInput) {
   return toLocalInputValue(iso).slice(0, 10);
 }
 
-export function toLocalTimeValue(iso: string) {
+export function toLocalTimeValue(iso: TimeInput) {
   return toLocalInputValue(iso).slice(11, 16);
 }
 
-export function dateOnlyToISO(value: string) {
-  return new Date(`${value}T12:00:00`).toISOString();
+export function dateOnlyToMs(value: string) {
+  return new Date(`${value}T12:00:00`).getTime();
 }
 
 // type="datetime-local" wird auf Android oft nicht zuverlaessig unterstuetzt (teils ohne
 // Uhrzeit-Auswahl) - deshalb getrennte date/time-Inputs, die hier wieder zusammengefuehrt
 // werden.
 export function combineLocalDateTime(dateValue: string, timeValue: string) {
-  return new Date(`${dateValue}T${timeValue || "00:00"}`).toISOString();
+  return new Date(`${dateValue}T${timeValue || "00:00"}`).getTime();
 }
 
-export function dateKey(d: Date | string) {
+export function dateKey(d: TimeInput) {
   const x = new Date(d);
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
 }
@@ -199,8 +198,7 @@ export function entrySummary(entry: AnyEntry): string {
       case "tagescheck":
         return `Folgsamkeit ${starGlyphs(entry.folgsamkeit)} · Sharklevel ${starGlyphs(entry.energie)}`;
       case "alone":
-        if (!entry.startDatetime || !entry.endDatetime) return "";
-        return `${formatDuration(aloneDurationMs(entry.startDatetime, entry.endDatetime))} · ${fmtTime(entry.startDatetime)}–${fmtTime(entry.endDatetime)} Uhr`;
+        return `${formatDuration(aloneDurationMs(entry.startAt, entry.endAt))} · ${fmtTime(entry.startAt)}–${fmtTime(entry.endAt)} Uhr`;
       default:
         return "";
     }

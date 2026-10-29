@@ -31,6 +31,8 @@ beforeEach(async () => {
 });
 
 const DATE = "2026-03-05T10:30:00.000Z";
+const AT = Date.parse(DATE);
+const POINT = { startAt: AT, endAt: AT };
 
 describe("kv-Einstellungen", () => {
   it("liefert null fuer einen unbekannten Schluessel", async () => {
@@ -56,7 +58,7 @@ describe("kv-Einstellungen", () => {
 
 describe("Eintraege", () => {
   it("erzeugt eine neue id, wenn keine uebergeben wird", async () => {
-    const entry = await saveEntry(undefined, "food", { food: "Nass", date: DATE, note: "Napf" });
+    const entry = await saveEntry(undefined, "food", { food: "Nass", note: "Napf" }, POINT);
 
     expect(entry.id).toBeTruthy();
     const listed = await listEntries();
@@ -65,47 +67,44 @@ describe("Eintraege", () => {
   });
 
   it("aktualisiert einen bestehenden Eintrag statt ihn zu duplizieren", async () => {
-    const first = await saveEntry(undefined, "food", { food: "Nass", date: DATE, note: "Napf" });
-    await saveEntry(first.id, "food", { food: "Nass", date: DATE, note: "Napf, aktualisiert" });
+    const first = await saveEntry(undefined, "food", { food: "Nass", note: "Napf" }, POINT);
+    await saveEntry(first.id, "food", { food: "Nass", note: "Napf, aktualisiert" }, POINT);
 
     const listed = await listEntries();
     expect(listed).toHaveLength(1);
     expect(listed[0].data.note).toBe("Napf, aktualisiert");
   });
 
-  it("speichert Alleine-Zeitpunkte als Epoch-ms (volle Minuten) und nur die Notiz in data", async () => {
-    const entry = await saveEntry(undefined, "alone", {
-      startDatetime: "2026-03-05T09:00:20.000Z",
-      endDatetime: "2026-03-05T10:30:20.000Z",
-      note: "x",
-    });
+  it("speichert Alleine-Zeitpunkte als Epoch-ms und nur die Notiz in data", async () => {
+    const range = { startAt: Date.UTC(2026, 2, 5, 9, 0), endAt: Date.UTC(2026, 2, 5, 10, 30) };
+    const entry = await saveEntry(undefined, "alone", { note: "x" }, range);
 
-    expect(entry.startAt).toBe(Date.UTC(2026, 2, 5, 9, 0));
-    expect(entry.endAt).toBe(Date.UTC(2026, 2, 5, 10, 30));
+    expect(entry.startAt).toBe(range.startAt);
+    expect(entry.endAt).toBe(range.endAt);
     expect(entry.data).toEqual({ note: "x" });
   });
 
   it("speichert Punkt-Ereignisse mit end = start und ohne date in data", async () => {
-    const entry = await saveEntry(undefined, "stress", { date: DATE, level: 2 });
+    const entry = await saveEntry(undefined, "stress", { level: 2 }, POINT);
     expect(entry.startAt).toBe(Date.parse(DATE));
     expect(entry.endAt).toBe(entry.startAt);
     expect(entry.data).toEqual({ level: 2 });
   });
 
   it("lehnt ungueltige Eintraege ab", async () => {
-    await expect(saveEntry(undefined, "stress", { level: 2 })).rejects.toThrow("Eintrag ungueltig");
-    await expect(saveEntry(undefined, "stress", { date: DATE, level: "x" })).rejects.toThrow("data.level");
+    await expect(saveEntry(undefined, "stress", { level: 2 }, { startAt: Number.NaN, endAt: Number.NaN })).rejects.toThrow("Eintrag ungueltig");
+    await expect(saveEntry(undefined, "stress", { level: "x" }, POINT)).rejects.toThrow("data.level");
   });
 
   it("blendet weich geloeschte Eintraege in listEntries aus", async () => {
-    const entry = await saveEntry(undefined, "training", { date: DATE, activity: "Sitz", dogStars: 3, trainerStars: 3 });
+    const entry = await saveEntry(undefined, "training", { activity: "Sitz", dogStars: 3, trainerStars: 3 }, POINT);
     await deleteEntry(entry.id);
 
     expect(await listEntries()).toHaveLength(0);
   });
 
   it("entfernt einen Eintrag lokal und reiht einen Tombstone fuer den Server ein", async () => {
-    const entry = await saveEntry(undefined, "stress", { date: DATE, level: 2 });
+    const entry = await saveEntry(undefined, "stress", { level: 2 }, POINT);
     await deleteEntry(entry.id);
 
     expect(await localDb.getEntry(entry.id)).toBeUndefined();
@@ -115,7 +114,7 @@ describe("Eintraege", () => {
   });
 
   it("loescht einen abgelehnten Eintrag ohne Tombstone", async () => {
-    const entry = await saveEntry(undefined, "stress", { date: DATE, level: 2 });
+    const entry = await saveEntry(undefined, "stress", { level: 2 }, POINT);
     await localDb.markRejected([{ id: entry.id, updatedAt: (await localDb.getQueuedEntry(entry.id))!.updatedAt, error: "x" }]);
     await deleteEntry(entry.id);
 
@@ -153,7 +152,7 @@ describe("Geduld pro Person", () => {
 describe("ausstehende Aenderungen", () => {
   it("zaehlt kv-, Eintrags- und Geduld-Mutationen zusammen", async () => {
     await setKv("tilly:note", "x");
-    await saveEntry(undefined, "food", { food: "Nass", date: DATE });
+    await saveEntry(undefined, "food", { food: "Nass" }, POINT);
     await setMyPatience("a@example.com", "2026-09-18", 3);
 
     expect(await getPendingCount()).toBe(3);

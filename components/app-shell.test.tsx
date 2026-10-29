@@ -91,6 +91,7 @@ describe("AppShell", () => {
       undefined,
       "tagescheck",
       expect.objectContaining({ folgsamkeit: 5 }),
+      expect.objectContaining({ startAt: expect.any(Number) }),
     );
   });
 
@@ -189,7 +190,7 @@ describe("AppShell", () => {
   });
 
   it("schiebt die Alleine-Karte bei laufendem Timer ganz nach oben", async () => {
-    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? new Date(Date.now() - 5 * 60_000).toISOString() : null));
+    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? String(Date.now() - 5 * 60_000) : null));
     render(<AppShell userEmail="a@example.com" />);
     const stop = await screen.findByRole("button", { name: "Stop" });
     const heute = screen.getByText("Heute");
@@ -197,27 +198,26 @@ describe("AppShell", () => {
   });
 
   it("speichert beim Stoppen nur Start und Ende und beendet den Timer", async () => {
-    const startedAt = new Date(Date.now() - 90 * 60_000).toISOString();
-    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? startedAt : null));
+    const startedAt = Date.now() - 90 * 60_000;
+    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? String(startedAt) : null));
     const user = userEvent.setup();
     render(<AppShell userEmail="a@example.com" />);
 
     await user.click(await screen.findByRole("button", { name: "Stop" }));
 
     await waitFor(() => expect(mockSaveEntry).toHaveBeenCalled());
-    const [id, type, data] = mockSaveEntry.mock.calls[0];
+    const [id, type, data, range] = mockSaveEntry.mock.calls[0];
     expect(id).toBeUndefined();
     expect(type).toBe("alone");
-    expect(data.startDatetime).toBe(new Date(Math.round(new Date(startedAt).getTime() / 60_000) * 60_000).toISOString());
-    expect(data).not.toHaveProperty("date");
-    expect(data).not.toHaveProperty("ms");
-    expect(new Date(data.endDatetime).getTime() - new Date(data.startDatetime).getTime()).toBe(90 * 60_000);
+    expect(range.startAt).toBe(Math.round(startedAt / 60_000) * 60_000);
+    expect(data).toEqual({});
+    expect(range.endAt - range.startAt).toBe(90 * 60_000);
     expect(mockSetKv).toHaveBeenCalledWith("alone-start", "");
     await waitFor(() => expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument());
   });
 
   it("loescht einen Timer unter einer Minute ohne einen Eintrag zu speichern", async () => {
-    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? new Date(Date.now() - 30_000).toISOString() : null));
+    mockGetKv.mockImplementation(async (key) => (key === "alone-start" ? String(Date.now() - 30_000) : null));
     const user = userEvent.setup();
     render(<AppShell userEmail="a@example.com" />);
 

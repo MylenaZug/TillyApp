@@ -20,7 +20,7 @@ import { useSyncStatus } from "@/lib/storage/useSyncStatus";
 import { SyncButton } from "@/components/tilly/SyncButton";
 import type { EntryRecord, PatienceRecord } from "@/lib/storage/types";
 import { ADDABLE_CATEGORIES, SYMPTOM_CATEGORIES, catMeta } from "@/lib/tilly/constants";
-import { dateKey, formatDuration, nowLocalISO, tillyAge, weightFeedback } from "@/lib/tilly/helpers";
+import { dateKey, formatDuration, tillyAge, weightFeedback } from "@/lib/tilly/helpers";
 import { aloneDurationMs, MIN_ALONE_DURATION_MS, roundToMinute } from "@/lib/tilly/alone";
 import type { AnyEntry, CategoryId, Exercise, FoodPlanSlots } from "@/lib/tilly/types";
 import { CatIcon, PawTrailLoader, PrimaryButton } from "@/components/tilly/ui";
@@ -33,17 +33,21 @@ import { EntryForm } from "@/components/tilly/EntryForm";
 
 const DEFAULT_TRAINING_TYPES = ["Sitz", "Leinenführigkeit", "Rückruf"];
 
-// Die UI arbeitet noch mit ISO-Strings (date, startDatetime, endDatetime); gespeichert sind Epoch-ms.
 function parseEntryRecord(record: EntryRecord): AnyEntry {
   return {
     ...record.data,
     id: record.id,
     type: record.type as CategoryId,
     updatedAt: record.updatedAt,
-    date: new Date(record.startAt).toISOString(),
-    startDatetime: new Date(record.startAt).toISOString(),
-    endDatetime: new Date(record.endAt).toISOString(),
+    startAt: record.startAt,
+    endAt: record.endAt,
   } as AnyEntry;
+}
+
+// kv "alone-start" enthaelt die Startzeit als Epoch-ms-String; leer, wenn kein Timer laeuft.
+function parseAloneStart(value: string | null): number | null {
+  const ms = Number(value);
+  return value && Number.isFinite(ms) && ms > 0 ? ms : null;
 }
 
 function NavButton({
@@ -86,7 +90,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const foodPlanSlotsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [patience, setPatience] = useState(0);
   const [allPatience, setAllPatience] = useState<PatienceRecord[]>([]);
-  const [aloneStart, setAloneStart] = useState<string | null>(null);
+  const [aloneStart, setAloneStart] = useState<number | null>(null);
 
   const [view, setView] = useState<View>("home");
   const [addCategory, setAddCategory] = useState<CategoryId | null>(null);
@@ -121,7 +125,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     setLoadedFrom(await getLoadedFrom());
     setHistoryComplete(await isHistoryComplete());
     const records = await listEntries();
-    const parsed = records.map(parseEntryRecord).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const parsed = records.map(parseEntryRecord).sort((a, b) => b.startAt - a.startAt);
     setEntries(parsed);
   }
 
@@ -145,7 +149,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     if (gn && !(afterSync && noteTimerRef.current)) setGeneralNote(gn);
     if (fp && !(afterSync && foodPlanTimerRef.current)) setFoodPlan(fp);
     if (fps) setFoodPlanSlots(JSON.parse(fps));
-    if (as) setAloneStart(as);
+    setAloneStart(parseAloneStart(as));
     // Standanduebungen kommen als DB-Seed (siehe db/seed.ts) bereits befuellt aus dem
     // kv_store - hier nur noch laden, kein Runtime-Merge/Seed im Client mehr noetig.
     if (ex) setExercises(JSON.parse(ex));
@@ -212,10 +216,10 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     setEditingId(null);
   }
 
-  async function handleSaveEntry(data: Record<string, unknown>) {
+  async function handleSaveEntry(data: Record<string, unknown>, range: { startAt: number; endAt: number }) {
     if (!addCategory) return;
     const isNew = !editingId;
-    await saveEntry(editingId ?? undefined, addCategory, data);
+    await saveEntry(editingId ?? undefined, addCategory, data, range);
 
     if (addCategory === "training" && typeof data.activity === "string" && data.activity && !trainingTypes.includes(data.activity)) {
       const next = [data.activity, ...trainingTypes];
@@ -260,12 +264,17 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     closeForm();
   }
 
-  const todayCheck = entries.find((e) => e.type === "tagescheck" && dateKey(e.date) === dateKey(new Date()));
+  const todayCheck = entries.find((e) => e.type === "tagescheck" && dateKey(e.startAt) === dateKey(new Date()));
 
   async function updateTodayCheck(field: "folgsamkeit" | "energie", value: number) {
-    const base = todayCheck ?? { date: nowLocalISO(), folgsamkeit: 0, energie: 0, note: "" };
-    const data = { ...base, [field]: value };
-    await saveEntry(todayCheck?.id, "tagescheck", data);
+    const data = {
+      folgsamkeit: todayCheck?.folgsamkeit ?? 0,
+      energie: todayCheck?.energie ?? 0,
+      note: todayCheck?.note ?? "",
+      [field]: value,
+    };
+    const at = todayCheck?.startAt ?? Date.now();
+    await saveEntry(todayCheck?.id, "tagescheck", data, { startAt: at, endAt: at });
     await refresh();
   }
 
@@ -327,8 +336,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   async function confirmFoodPlanSlot(daytime: string) {
     const slot = foodPlanSlots[daytime];
     if (!slot || !slot.food.trim()) return;
-    const data = { date: nowLocalISO(), food: slot.food.trim(), amount: slot.amount, amountUnit: slot.amountUnit, daytime };
-    await saveEntry(undefined, "food", data);
+    const data = { food: slot.food.trim(), amount: slot.amount, amountUnit: slot.amountUnit, daytime };
+    const at = Date.now();
+    await saveEntry(undefined, "food", data, { startAt: at, endAt: at });
     if (!foodTypes.includes(slot.food.trim())) {
       const next = [slot.food.trim(), ...foodTypes];
       setFoodTypes(next);
@@ -339,17 +349,17 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   }
 
   async function startAloneTimer() {
-    const iso = new Date().toISOString();
-    setAloneStart(iso);
-    await setKv("alone-start", iso);
+    const startedAt = Date.now();
+    setAloneStart(startedAt);
+    await setKv("alone-start", String(startedAt));
   }
 
   async function stopAloneTimer() {
     if (!aloneStart) return;
-    const actualEnd = new Date();
-    const actualDurationMs = actualEnd.getTime() - new Date(aloneStart).getTime();
+    const actualEnd = Date.now();
+    const actualDurationMs = actualEnd - aloneStart;
     const startedAt = roundToMinute(aloneStart);
-    const endedAt = roundToMinute(actualEnd.toISOString());
+    const endedAt = roundToMinute(actualEnd);
     const ms = aloneDurationMs(startedAt, endedAt);
     setAloneStart(null);
     await setKv("alone-start", "");
@@ -357,7 +367,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       showToast("Allein-Zeit nicht gespeichert · unter 1 Minute", "warn");
       return;
     }
-    await saveEntry(undefined, "alone", { startDatetime: startedAt, endDatetime: endedAt });
+    await saveEntry(undefined, "alone", {}, { startAt: startedAt, endAt: endedAt });
     await refresh();
     showToast(`Allein-Zeit gespeichert · ${formatDuration(ms)}`);
   }
@@ -476,7 +486,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             foodPlanSlots={foodPlanSlots}
             onFoodPlanSlotsChange={handleFoodPlanSlotsChange}
             foodPlanStatus={foodPlanStatus}
-            onSave={(data) => void handleSaveEntry(data)}
+            onSave={(data, range) => void handleSaveEntry(data, range)}
             onDelete={editingId ? () => void handleDeleteEntry() : null}
             onCancel={closeForm}
           />

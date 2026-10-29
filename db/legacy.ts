@@ -1,7 +1,7 @@
-// Ableitung von Start/Ende aus dem Altformat (data.date bzw. startedAt/endedAt/ms bei alone);
-// genutzt von der Datenmigration, der Sync-API (Uebergang) und der Client-Migration.
+// Ableitung von Start/Ende und Bereinigung altformatiger Daten; wird nur von der
+// einmaligen Datenmigration (migrate-data.ts) benoetigt.
 
-import { LEGACY_STOOL_CONSISTENCY } from "./constants";
+import { LEGACY_STOOL_CONSISTENCY } from "../lib/tilly/constants";
 
 const MINUTE_MS = 60_000;
 const roundToMinute = (ms: number) => Math.round(ms / MINUTE_MS) * MINUTE_MS;

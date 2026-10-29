@@ -19,17 +19,15 @@ export type AloneData = EntryDataByType["alone"];
 export type FoodPlanSlot = { food: string; amount?: number; amountUnit?: string };
 export type FoodPlanSlots = Record<string, FoodPlanSlot>;
 
-// Flache Sicht auf einen Eintrag (wie im alten Firebase-Prototyp): id/type/updatedAt
-// vom Storage-Layer plus die typspezifischen Felder aus `data` auf einer Ebene.
+// Flache Sicht auf einen Eintrag: id/type/updatedAt und der Zeitraum (Epoch-ms, bei
+// Punktereignissen startAt = endAt) vom Storage-Layer plus die typspezifischen Felder aus `data`.
 export type AnyEntry = {
   id: string;
   type: CategoryId;
   updatedAt: number;
-  startDatetime?: string;
-  endDatetime?: string;
-} & Partial<StoolData & TrainingData & WeightData & FoodData & VetData & SymptomData & StressData & KostenData & TagescheckData & AloneData> & {
-    date: string;
-  };
+  startAt: number;
+  endAt: number;
+} & Partial<StoolData & TrainingData & WeightData & FoodData & VetData & SymptomData & StressData & KostenData & TagescheckData & AloneData>;
 
 export type Exercise = {
   id: string;
