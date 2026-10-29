@@ -1,0 +1,75 @@
+import { describe, expect, it } from "vitest";
+import type { AnyEntry } from "@/lib/tilly/types";
+import {
+  combineLocalDateTime,
+  dateKey,
+  dateOnlyToMs,
+  entrySummary,
+  formatDuration,
+  startOfDay,
+  toLocalDateValue,
+  toLocalTimeValue,
+} from "@/lib/tilly/helpers";
+
+const alone = (o: object) => ({ id: "1", type: "alone", startAt: 0, endAt: 0, ...o }) as unknown as AnyEntry;
+
+describe("formatDuration", () => {
+  it("zeigt Minuten unter einer Stunde und Stunden plus Minuten darueber", () => {
+    expect(formatDuration(0)).toBe("0 Min");
+    expect(formatDuration(59_999)).toBe("0 Min");
+    expect(formatDuration(45 * 60_000)).toBe("45 Min");
+    expect(formatDuration(90 * 60_000)).toBe("1 Std 30 Min");
+  });
+
+  it("behandelt negative Werte als 0", () => {
+    expect(formatDuration(-5000)).toBe("0 Min");
+  });
+});
+
+describe("entrySummary fuer Alleine-Eintraege", () => {
+  const start = new Date(2026, 0, 1, 9, 0).getTime();
+  const end = new Date(2026, 0, 1, 10, 30).getTime();
+
+  it("zeigt Dauer und Uhrzeiten von-bis aus startAt und endAt", () => {
+    expect(entrySummary(alone({ startAt: start, endAt: end }))).toBe("1 Std 30 Min · 09:00–10:30 Uhr");
+  });
+
+  it("akzeptiert eine Dauer von 0 als gueltigen Wert", () => {
+    expect(entrySummary(alone({ startAt: start, endAt: start }))).toContain("0 Min");
+  });
+});
+
+describe("Datum/Uhrzeit-Helfer", () => {
+  it("vergleicht lokale Kalendertage auch nach einer DST-Umstellung korrekt", () => {
+    const previousTimezone = process.env.TZ;
+    process.env.TZ = "Europe/Berlin";
+    try {
+      const yesterday = "2026-03-28T23:30:00.000Z";
+      const today = "2026-03-29T22:30:00.000Z";
+      expect(
+        Math.floor((startOfDay(new Date(today)).getTime() - startOfDay(new Date(yesterday)).getTime()) / 86_400_000),
+      ).toBe(0);
+      expect(dateKey(yesterday)).toBe("2026-03-29");
+      expect(dateKey(today)).toBe("2026-03-30");
+    } finally {
+      if (previousTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTimezone;
+    }
+  });
+
+  it("zerlegt und fuehrt lokale Zeit verlustfrei wieder zusammen", () => {
+    const iso = combineLocalDateTime("2026-03-05", "07:45");
+    expect(toLocalDateValue(iso)).toBe("2026-03-05");
+    expect(toLocalTimeValue(iso)).toBe("07:45");
+  });
+
+  it("nimmt 00:00 an, wenn keine Uhrzeit angegeben ist", () => {
+    expect(toLocalTimeValue(combineLocalDateTime("2026-03-05", ""))).toBe("00:00");
+  });
+
+  it("legt reine Datumswerte auf 12:00 lokal, damit Zeitzonen den Tag nicht verschieben", () => {
+    const iso = dateOnlyToMs("2026-03-05");
+    expect(toLocalDateValue(iso)).toBe("2026-03-05");
+    expect(toLocalTimeValue(iso)).toBe("12:00");
+  });
+});
