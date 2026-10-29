@@ -67,6 +67,8 @@ function NavButton({
 
 type View = "home" | "history" | "analysis" | "exercises" | "gallery" | "add";
 
+type ToastTone = "ok" | "warn";
+
 export default function AppShell({ userEmail }: { userEmail: string }) {
   const [ready, setReady] = useState(false);
   const [entries, setEntries] = useState<AnyEntry[]>([]);
@@ -91,7 +93,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<CategoryId | "all">("all");
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sync = useSyncStatus();
@@ -182,19 +184,19 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const prevRejectedCount = useRef(0);
   useEffect(() => {
     if (rejectedCount > prevRejectedCount.current) {
-      showToast(`${rejectedCount} ${rejectedCount === 1 ? "Eintrag wurde" : "Einträge wurden"} vom Server abgelehnt – bitte im Verlauf prüfen`);
+      showToast(`${rejectedCount} ${rejectedCount === 1 ? "Eintrag" : "Einträge"} vom Server abgelehnt · bitte im Verlauf prüfen`, "warn");
     }
     prevRejectedCount.current = rejectedCount;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rejectedCount]);
 
-  function showToast(message: string) {
+  // Meldungen: "<Gegenstand> <Vorgang>", Zusatzinfo nach " · ", kein Emoji.
+  function showToast(message: string, tone: ToastTone = "ok") {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToast(message);
-    // Laengere Rueckmeldungen (z.B. der Gewichts-Vergleich) brauchen mehr Lesezeit als ein
-    // kurzes "X gespeichert ✓".
-    const duration = message.length > 30 ? 4200 : 2200;
-    toastTimerRef.current = setTimeout(() => setToast(""), duration);
+    setToast({ message, tone });
+    // Laengere Rueckmeldungen (z.B. der Gewichts-Vergleich) brauchen mehr Lesezeit.
+    const duration = tone === "warn" ? 6000 : message.length > 30 ? 4200 : 2200;
+    toastTimerRef.current = setTimeout(() => setToast(null), duration);
   }
 
   function openAdd(catId: CategoryId, existing?: AnyEntry) {
@@ -247,7 +249,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         : null;
 
     await refresh();
-    showToast(weightMessage ?? `${catMeta(addCategory).label} ${isNew ? "gespeichert" : "aktualisiert"} ✓`);
+    showToast(weightMessage ? `Gewicht ${isNew ? "gespeichert" : "aktualisiert"} · ${weightMessage}` : `${catMeta(addCategory).label} ${isNew ? "gespeichert" : "aktualisiert"}`);
     closeForm();
   }
 
@@ -333,7 +335,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       void setKv("food-types", JSON.stringify(next));
     }
     await refresh();
-    showToast(`${catMeta("food").label} gespeichert ✓`);
+    showToast(`${catMeta("food").label} gespeichert`);
   }
 
   async function startAloneTimer() {
@@ -352,12 +354,12 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     setAloneStart(null);
     await setKv("alone-start", "");
     if (actualDurationMs < MIN_ALONE_DURATION_MS || ms < MIN_ALONE_DURATION_MS || !startedAt || !endedAt) {
-      showToast("Unter 1 Minute nicht gespeichert");
+      showToast("Allein-Zeit nicht gespeichert · unter 1 Minute", "warn");
       return;
     }
     await saveEntry(undefined, "alone", { startDatetime: startedAt, endDatetime: endedAt });
     await refresh();
-    showToast(`Tilly war ${formatDuration(ms)} allein`);
+    showToast(`Allein-Zeit gespeichert · ${formatDuration(ms)}`);
   }
 
   async function saveExercise(exercise: Exercise) {
@@ -406,7 +408,21 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             </div>
           </div>
         </div>
-        <SyncButton {...sync} userEmail={userEmail} />
+        <div className="relative">
+          <SyncButton {...sync} userEmail={userEmail} />
+          {toast && (
+            <div
+              role="status"
+              className={`absolute right-0 top-full z-50 mt-2.5 w-max max-w-[min(80vw,320px)] rounded-2xl px-4 py-2.5 shadow-lg ${toast.tone === "warn" ? "bg-red-700" : "bg-ink"}`}
+            >
+              <span
+                aria-hidden
+                className={`absolute -top-1 right-3.5 h-3 w-3 rotate-45 rounded-sm ${toast.tone === "warn" ? "bg-red-700" : "bg-ink"}`}
+              />
+              <span className="relative text-sm font-medium text-white">{toast.message}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-3">
@@ -517,11 +533,6 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       )}
 
 
-      {toast && (
-        <div className="absolute bottom-24 left-1/2 w-[min(90%,360px)] -translate-x-1/2 rounded-2xl bg-ink px-4 py-2.5 text-center shadow-lg">
-          <span className="text-sm font-medium text-white">{toast}</span>
-        </div>
-      )}
     </div>
   );
 }

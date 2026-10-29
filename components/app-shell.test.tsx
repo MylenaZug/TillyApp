@@ -110,7 +110,7 @@ describe("AppShell", () => {
     const user = userEvent.setup();
     render(<AppShell userEmail="a@example.com" />);
     await waitFor(() => expect(mockListEntries).toHaveBeenCalled());
-    expect(await screen.findByText(/1 Eintrag wurde vom Server abgelehnt/)).toBeInTheDocument();
+    expect(await screen.findByText(/1 Eintrag vom Server abgelehnt/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Verlauf" }));
     expect(await screen.findByText(/Vom Server abgelehnt/)).toBeInTheDocument();
   });
@@ -224,7 +224,7 @@ describe("AppShell", () => {
     await user.click(await screen.findByRole("button", { name: "Stop" }));
 
     expect(mockSaveEntry).not.toHaveBeenCalled();
-    expect(await screen.findByText("Unter 1 Minute nicht gespeichert")).toBeInTheDocument();
+    expect(await screen.findByText("Allein-Zeit nicht gespeichert · unter 1 Minute")).toBeInTheDocument();
     expect(mockSetKv).toHaveBeenCalledWith("alone-start", "");
   });
 

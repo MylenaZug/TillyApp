@@ -109,7 +109,7 @@ export function formatDuration(ms: number): string {
 // ueberhaupt. `previousWeightEntries` erwartet bereits auf type "weight" gefilterte und
 // den neuen Eintrag selbst ausschliessende Eintraege.
 export function weightFeedback(kg: number, daytime: string | undefined, previousWeightEntries: AnyEntry[]): string {
-  if (previousWeightEntries.length === 0) return "Erster Gewichts-Eintrag gespeichert ✓";
+  if (previousWeightEntries.length === 0) return "erster Eintrag";
 
   const sorted = [...previousWeightEntries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const sameDaytime = daytime ? sorted.find((e) => e.daytime === daytime) : undefined;
