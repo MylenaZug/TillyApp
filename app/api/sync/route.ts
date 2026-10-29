@@ -1,134 +1,160 @@
 import { NextRequest, NextResponse } from "next/server";
-import { gt, sql } from "drizzle-orm";
+import { and, eq, gt, gte } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db/client";
 import { dailyPatience, entries, kvStore } from "@/db/schema";
+import { checkProtocol, currentSeq, nextSeq, toWireEntry } from "@/lib/server/sync";
 import { displayNameFor } from "@/lib/server/uploads";
-import { legacyRange } from "@/db/migrate-data";
+import {
+  SYNC_PROTOCOL_VERSION,
+  SYNC_WINDOW_DAYS,
+  pushEntrySchema,
+  pushKvSchema,
+  pushPatienceSchema,
+  type RejectedItem,
+  type SyncPullResponse,
+  type SyncPushResponse,
+} from "@/lib/tilly/protocol";
 import { parseEntry } from "@/lib/tilly/schemas";
 
-type KvMutation = { key: string; value: string; updatedAt: number };
-type EntryMutation = {
-  id: string;
-  type: string;
-  data: string;
-  startDatetime?: string | null;
-  endDatetime?: string | null;
-  updatedAt: number;
-  deleted?: 0 | 1;
-};
-type PatienceMutation = { date: string; geduld: number; updatedAt: number };
+export const runtime = "nodejs";
 
-// Uebergang bis zur neuen Sync-API (naechster Schritt): Die Leitung spricht noch das alte
-// Format (ISO-Strings, `date` in data); die DB speichert bereits Epoch-ms ohne `date`.
-function toWireEntry(row: typeof entries.$inferSelect) {
-  const { startAt, endAt, serverSeq: _serverSeq, ...rest } = row;
-  const startDatetime = new Date(startAt).toISOString();
-  const data = JSON.parse(row.data) as Record<string, unknown>;
-  if (row.type !== "alone") data.date = startDatetime;
-  return { ...rest, data: JSON.stringify(data), startDatetime, endDatetime: new Date(endAt).toISOString() };
-}
+const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Ohne `token`: Eintraege der letzten SYNC_WINDOW_DAYS Tage plus alle Einstellungen.
+ * Mit `token`: nur Aenderungen mit hoeherer server_seq (inkl. Loeschungen, unabhaengig vom Datum).
+ * Ein Token, das der Server nicht kennt (z.B. nach einem Backup-Restore), fuehrt zu 409.
+ */
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const outdated = checkProtocol(request);
+  if (outdated) return outdated;
 
-  const since = Number(request.nextUrl.searchParams.get("since") || 0);
+  const tokenParam = request.nextUrl.searchParams.get("token");
+  const seq = currentSeq();
+  let since: number | null = null;
+  if (tokenParam !== null) {
+    since = Number(tokenParam);
+    if (!Number.isInteger(since) || since < 0 || since > seq) {
+      return NextResponse.json({ error: "resync" }, { status: 409 });
+    }
+  }
 
-  const [kvRows, entryRows, patienceRows] = await Promise.all([
-    db.select().from(kvStore).where(gt(kvStore.updatedAt, since)),
-    db.select().from(entries).where(gt(entries.updatedAt, since)),
-    db.select().from(dailyPatience).where(gt(dailyPatience.updatedAt, since)),
-  ]);
+  const windowStart = since === null ? Date.now() - SYNC_WINDOW_DAYS * DAY_MS : null;
+  const entryRows =
+    since === null
+      ? db
+          .select()
+          .from(entries)
+          .where(and(eq(entries.deleted, 0), gte(entries.endAt, windowStart!)))
+          .all()
+      : db.select().from(entries).where(gt(entries.serverSeq, since)).all();
+  const kvRows = since === null ? db.select().from(kvStore).all() : db.select().from(kvStore).where(gt(kvStore.serverSeq, since)).all();
+  const patienceRows =
+    since === null
+      ? db.select().from(dailyPatience).all()
+      : db.select().from(dailyPatience).where(gt(dailyPatience.serverSeq, since)).all();
 
-  return NextResponse.json({
-    serverTime: Date.now(),
+  const body: SyncPullResponse = {
+    protocol: SYNC_PROTOCOL_VERSION,
+    token: seq,
+    full: since === null,
+    windowStart,
     kv: kvRows,
     entries: entryRows.map(toWireEntry),
     dailyPatience: patienceRows.map((r) => ({ ...r, userName: displayNameFor(r.userEmail) })),
-  });
+  };
+  return NextResponse.json(body);
 }
 
+/**
+ * Nimmt Aenderungen des Clients an (last push wins). updated_at und server_seq vergibt der
+ * Server beim Schreiben. Ungueltige Elemente werden einzeln in `rejected` gemeldet, die
+ * uebrigen trotzdem gespeichert.
+ */
 export async function POST(request: NextRequest) {
   const session = await auth();
   const userEmail = session?.user?.email;
   if (!userEmail) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const outdated = checkProtocol(request);
+  if (outdated) return outdated;
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
 
-  const kv: KvMutation[] = Array.isArray(body.kv) ? body.kv : [];
-  const entryMutations: EntryMutation[] = Array.isArray(body.entries) ? body.entries : [];
-  // Geduld gehoert immer dem eingeloggten Account - der Client kann keine fremde E-Mail einschleusen.
-  const patience: PatienceMutation[] = Array.isArray(body.dailyPatience) ? body.dailyPatience : [];
+  const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+  const rejected: RejectedItem[] = [];
+  const idOf = (item: unknown, field: string) => {
+    const value = (item as Record<string, unknown> | null)?.[field];
+    return typeof value === "string" ? value : "?";
+  };
 
-  for (const row of kv) {
-    await db
-      .insert(kvStore)
-      .values(row)
-      .onConflictDoUpdate({
-        target: kvStore.key,
-        set: { value: row.value, updatedAt: row.updatedAt },
-        where: sql`${kvStore.updatedAt} < ${row.updatedAt}`,
-      });
-  }
-
-  for (const row of entryMutations) {
-    let parsedData: unknown;
-    try {
-      parsedData = JSON.parse(row.data);
-    } catch {
-      continue;
+  db.transaction((tx) => {
+    for (const item of list(body.kv)) {
+      const parsed = pushKvSchema.safeParse(item);
+      if (!parsed.success) {
+        rejected.push({ kind: "kv", id: idOf(item, "key"), error: parsed.error.message });
+        continue;
+      }
+      const values = { ...parsed.data, updatedAt: Date.now(), serverSeq: nextSeq(tx) };
+      tx.insert(kvStore)
+        .values(values)
+        .onConflictDoUpdate({ target: kvStore.key, set: { value: values.value, updatedAt: values.updatedAt, serverSeq: values.serverSeq } })
+        .run();
     }
-    const range = legacyRange(row.type, {
-      ...(parsedData as Record<string, unknown>),
-      ...(row.startDatetime ? { startDatetime: row.startDatetime } : {}),
-      ...(row.endDatetime ? { endDatetime: row.endDatetime } : {}),
-    });
-    const parsed = parseEntry({ type: row.type, ...range, data: parsedData });
-    if (!parsed.ok) continue;
-    const values = {
-      id: row.id,
-      type: row.type,
-      data: JSON.stringify(parsed.data),
-      startAt: parsed.startAt,
-      endAt: parsed.endAt,
-      updatedAt: row.updatedAt,
-      deleted: row.deleted ?? 0,
-    };
-    await db
-      .insert(entries)
-      .values(values)
-      .onConflictDoUpdate({
-        target: entries.id,
-        set: {
-          type: values.type,
-          data: values.data,
-          startAt: values.startAt,
-          endAt: values.endAt,
-          updatedAt: values.updatedAt,
-          deleted: values.deleted,
-        },
-        where: sql`${entries.updatedAt} < ${row.updatedAt}`,
-      });
-  }
 
-  for (const row of patience) {
-    await db
-      .insert(dailyPatience)
-      .values({ userEmail, date: row.date, geduld: row.geduld, updatedAt: row.updatedAt })
-      .onConflictDoUpdate({
-        target: [dailyPatience.userEmail, dailyPatience.date],
-        set: { geduld: row.geduld, updatedAt: row.updatedAt },
-        where: sql`${dailyPatience.updatedAt} < ${row.updatedAt}`,
-      });
-  }
+    for (const item of list(body.entries)) {
+      const shape = pushEntrySchema.safeParse(item);
+      if (!shape.success) {
+        rejected.push({ kind: "entry", id: idOf(item, "id"), error: shape.error.message });
+        continue;
+      }
+      const { id, type, startAt, endAt, data, deleted } = shape.data;
+      const parsed = parseEntry({ type, startAt, endAt, data });
+      if (!parsed.ok) {
+        rejected.push({ kind: "entry", id, error: parsed.error });
+        continue;
+      }
+      const values = {
+        id,
+        type,
+        data: JSON.stringify(parsed.data),
+        startAt: parsed.startAt,
+        endAt: parsed.endAt,
+        updatedAt: Date.now(),
+        serverSeq: nextSeq(tx),
+        deleted: deleted ? 1 : 0,
+      };
+      const { id: _id, ...set } = values;
+      tx.insert(entries).values(values).onConflictDoUpdate({ target: entries.id, set }).run();
+    }
 
-  return NextResponse.json({ serverTime: Date.now() });
+    // Geduld gehoert immer dem eingeloggten Account - der Client kann keine fremde E-Mail einschleusen.
+    for (const item of list(body.dailyPatience)) {
+      const parsed = pushPatienceSchema.safeParse(item);
+      if (!parsed.success) {
+        rejected.push({ kind: "dailyPatience", id: idOf(item, "date"), error: parsed.error.message });
+        continue;
+      }
+      const values = { userEmail, ...parsed.data, updatedAt: Date.now(), serverSeq: nextSeq(tx) };
+      tx.insert(dailyPatience)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [dailyPatience.userEmail, dailyPatience.date],
+          set: { geduld: values.geduld, updatedAt: values.updatedAt, serverSeq: values.serverSeq },
+        })
+        .run();
+    }
+  });
+
+  const response: SyncPushResponse = { protocol: SYNC_PROTOCOL_VERSION, token: currentSeq(), rejected };
+  return NextResponse.json(response);
 }
