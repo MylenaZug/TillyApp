@@ -1,0 +1,208 @@
+import { STRESS_LEVELS, TILLY_BIRTHDATE } from "./constants";
+import { aloneDurationMs } from "./alone";
+import type { AnyEntry } from "./types";
+
+// Zeitpunkte sind Epoch-ms (startAt/endAt); Date und ISO-String bleiben fuer Formularwerte erlaubt.
+export type TimeInput = number | string | Date;
+
+export const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+export function tillyAge(): string {
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - TILLY_BIRTHDATE.getTime()) / 86400000);
+  let years = now.getFullYear() - TILLY_BIRTHDATE.getFullYear();
+  let months = now.getMonth() - TILLY_BIRTHDATE.getMonth();
+  let days = now.getDate() - TILLY_BIRTHDATE.getDate();
+  if (days < 0) months -= 1;
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+
+  const monthMark = new Date(TILLY_BIRTHDATE);
+  monthMark.setFullYear(TILLY_BIRTHDATE.getFullYear() + years);
+  monthMark.setMonth(TILLY_BIRTHDATE.getMonth() + months);
+  const remainderDays = Math.floor((now.getTime() - monthMark.getTime()) / 86400000);
+  const weeks = Math.max(0, Math.floor(remainderDays / 7));
+
+  if (years === 0 && months === 0) {
+    if (diffDays < 7) return `${diffDays} ${diffDays === 1 ? "Tag" : "Tage"} alt`;
+    return `${weeks} ${weeks === 1 ? "Woche" : "Wochen"} alt`;
+  }
+
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years} ${years === 1 ? "Jahr" : "Jahre"}`);
+  if (months > 0) parts.push(`${months} ${months === 1 ? "Monat" : "Monate"}`);
+  if (weeks > 0) parts.push(`${weeks} ${weeks === 1 ? "Woche" : "Wochen"}`);
+  return parts.join(", ") + " alt";
+}
+
+export const fmtDateTime = (iso: TimeInput) =>
+  new Date(iso).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+export const fmtDate = (iso: TimeInput) =>
+  new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
+export const fmtTime = (iso: TimeInput) =>
+  new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+
+export const startOfDay = (d: TimeInput) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+};
+
+export const daysAgo = (iso: TimeInput) =>
+  Math.floor((startOfDay(new Date()).getTime() - startOfDay(new Date(iso)).getTime()) / 86400000);
+
+export function dateForOffset(offset: number) {
+  const d = startOfDay(new Date());
+  d.setDate(d.getDate() - offset);
+  return d;
+}
+
+export function dayLabel(iso: TimeInput) {
+  const d = daysAgo(iso);
+  if (d === 0) return "Heute";
+  if (d === 1) return "Gestern";
+  return new Date(iso).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+}
+
+export function groupByDay<T extends { startAt: number }>(list: T[]) {
+  const groups: { label: string; items: T[] }[] = [];
+  list.forEach((e) => {
+    const label = dayLabel(e.startAt);
+    let g = groups.find((group) => group.label === label);
+    if (!g) {
+      g = { label, items: [] };
+      groups.push(g);
+    }
+    g.items.push(e);
+  });
+  return groups;
+}
+
+// Ordnet auch aeltere Eintraege noch sinnvoll einer der 3 aktuellen Stufen zu
+export function stressLabelFor(level: number) {
+  const clamped = Math.min(STRESS_LEVELS.length, Math.max(1, Math.round(level) || 1));
+  return STRESS_LEVELS[clamped - 1]?.label || "";
+}
+
+export function stoolConsistency(entry: AnyEntry): string[] {
+  return Array.isArray(entry.consistency) ? entry.consistency : [];
+}
+
+export function starGlyphs(n?: number) {
+  const count = n || 0;
+  return "★".repeat(count) + "☆".repeat(5 - count);
+}
+
+export function formatDuration(ms: number): string {
+  const totalMinutes = Math.max(0, Math.floor(ms / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes} Min`;
+  return `${hours} Std ${minutes} Min`;
+}
+
+// Gewicht schwankt ueber den Tag - fuer einen fairen Vergleich wird nach Moeglichkeit
+// der letzte Eintrag mit derselben Tageszeit herangezogen, nicht einfach der letzte
+// ueberhaupt. `previousWeightEntries` erwartet bereits auf type "weight" gefilterte und
+// den neuen Eintrag selbst ausschliessende Eintraege.
+export function weightFeedback(kg: number, daytime: string | undefined, previousWeightEntries: AnyEntry[]): string {
+  if (previousWeightEntries.length === 0) return "erster Eintrag";
+
+  const sorted = [...previousWeightEntries].sort((a, b) => b.startAt - a.startAt);
+  const sameDaytime = daytime ? sorted.find((e) => e.daytime === daytime) : undefined;
+  const reference = sameDaytime || sorted[0];
+  const delta = kg - (Number(reference.kg) || 0);
+
+  const trend =
+    Math.abs(delta) < 0.05
+      ? "Gewicht unverändert"
+      : delta > 0
+        ? `${delta.toFixed(1)} kg zugenommen`
+        : `${Math.abs(delta).toFixed(1)} kg abgenommen`;
+
+  const refLabel = reference.daytime ? `${reference.daytime}, ${fmtDate(reference.startAt)}` : fmtDate(reference.startAt);
+  const comparableNote = sameDaytime ? "" : " · andere Tageszeit, bedingt vergleichbar";
+  return `${trend} seit ${refLabel}${comparableNote}`;
+}
+
+export function nowMinute() {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  return d.getTime();
+}
+
+// datetime-local braucht lokale Zeit als String (YYYY-MM-DDTHH:mm),
+// nicht UTC - sonst verschiebt sich die Anzeige um die Zeitzonen-Differenz.
+export function toLocalInputValue(iso: TimeInput) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function toLocalDateValue(iso: TimeInput) {
+  return toLocalInputValue(iso).slice(0, 10);
+}
+
+export function toLocalTimeValue(iso: TimeInput) {
+  return toLocalInputValue(iso).slice(11, 16);
+}
+
+export function dateOnlyToMs(value: string) {
+  return new Date(`${value}T12:00:00`).getTime();
+}
+
+// type="datetime-local" wird auf Android oft nicht zuverlaessig unterstuetzt (teils ohne
+// Uhrzeit-Auswahl) - deshalb getrennte date/time-Inputs, die hier wieder zusammengefuehrt
+// werden.
+export function combineLocalDateTime(dateValue: string, timeValue: string) {
+  return new Date(`${dateValue}T${timeValue || "00:00"}`).getTime();
+}
+
+export function dateKey(d: TimeInput) {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+}
+
+// Leerer String, wenn ein Eintrag korrupt ist (z.B. kaputtes
+// JSON aus einer alten Sync-Version) und die typspezifischen Felder fehlen.
+export function entrySummary(entry: AnyEntry): string {
+  try {
+    switch (entry.type) {
+      case "stool": {
+        const consistency = stoolConsistency(entry);
+        if (consistency.length === 0) return "";
+        return `${consistency.join(", ")}${entry.stoolAmount ? " · " + entry.stoolAmount : ""}${entry.color ? " · " + entry.color : ""}`;
+      }
+      case "training":
+        if (!entry.activity) return "";
+        return entry.activity;
+      case "weight":
+        if (entry.kg === undefined || entry.kg === null || Number.isNaN(Number(entry.kg))) return "";
+        return `${entry.kg} kg${entry.daytime ? " · " + entry.daytime : ""}`;
+      case "food":
+        if (!entry.food) return "";
+        return `${entry.food}${entry.amount ? " · " + entry.amount + " " + (entry.amountUnit || "Gramm") : ""}`;
+      case "vet":
+        return `${entry.reason || "Termin"}`;
+      case "symptom":
+        if (!entry.category) return "";
+        return entry.category;
+      case "stress":
+        if (!entry.level) return "";
+        return `${stressLabelFor(entry.level)} (${entry.level}/3)`;
+      case "kosten":
+        if (entry.amount === undefined || Number.isNaN(Number(entry.amount))) return "";
+        return `${entry.category} · ${Number(entry.amount).toFixed(2)} €`;
+      case "tagescheck":
+        return `Folgsamkeit ${starGlyphs(entry.folgsamkeit)} · Sharklevel ${starGlyphs(entry.energie)}`;
+      case "alone":
+        return `${formatDuration(aloneDurationMs(entry.startAt, entry.endAt))} · ${fmtTime(entry.startAt)}–${fmtTime(entry.endAt)} Uhr`;
+      default:
+        return "";
+    }
+  } catch {
+    return "";
+  }
+}
