@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.vscode/
 out/
 dist/
 *.db
@@ -14,9 +15,9 @@ dist/
 next-env.d.ts
 tsconfig.tsbuildinfo
 
-# von @ducanh2912/next-pwa bei jedem Build/Dev-Start neu nach public/ generiert
+# von Serwist bei jedem Build nach public/ generiert
 /public/sw.js
-/public/swe-worker-development.js
+/public/swe-worker*
 /public/workbox-*.js
 
 .DS_Store

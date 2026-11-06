@@ -43,8 +43,8 @@ synchronisiert Einträge automatisch, sobald wieder eine Verbindung zum Server b
 ## Entwicklung
 
 Die Entwicklung läuft in einem Dev Container (VS Code "Reopen in Container" bzw.
-`devcontainer CLI`), nicht nativ auf dem Host – das Devcontainer-Image bringt Node 20 sowie
-die Build-Tools mit, die `better-sqlite3` zum Kompilieren braucht. Beim ersten Start richtet
+`devcontainer CLI`), nicht nativ auf dem Host – das Devcontainer-Image bringt Node 24.22.2
+(npm 11.19.1) sowie die Build-Tools mit, die `better-sqlite3` zum Kompilieren braucht. Beim ersten Start richtet
 `.devcontainer/setup.sh` automatisch `.env` (inkl. generiertem `AUTH_SECRET`) ein.
 
 ```bash

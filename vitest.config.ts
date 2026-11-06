@@ -3,8 +3,8 @@ import path from "node:path";
 
 export default defineConfig({
   // Next.js-Komponenten importieren React nicht explizit (automatic JSX runtime).
-  esbuild: {
-    jsx: "automatic",
+  oxc: {
+    jsx: { runtime: "automatic" },
   },
   test: {
     environment: "jsdom",

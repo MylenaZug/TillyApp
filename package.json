@@ -1,11 +1,11 @@
 {
   "name": "tilly-tracker",
   "private": true,
-  "version": "3.0.0",
+  "version": "3.1.0",
   "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
@@ -18,19 +18,19 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.5.0",
-    "drizzle-orm": "^0.36.0",
+    "drizzle-orm": "^0.45.4",
     "idb": "^8.0.4",
     "lucide-react": "^0.383.0",
-    "next": "^15.0.0",
+    "next": "^16.4.5",
     "next-auth": "^5.0.0-beta.25",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.12.7",
     "sharp": "^0.35.5",
+    "@serwist/next": "^9.5.13",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@ducanh2912/next-pwa": "^10.2.8",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.1",
     "@testing-library/user-event": "^14.5.2",
@@ -39,13 +39,17 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
-    "drizzle-kit": "^0.28.0",
+    "drizzle-kit": "^0.31.11",
     "fake-indexeddb": "^6.0.0",
     "jsdom": "^25.0.1",
-    "postcss": "^8.4.47",
+    "postcss": "^8.5.32",
+    "serwist": "^9.5.13",
     "tailwindcss": "^3.4.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.4"
+    "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "zod": "$zod"
   }
 }

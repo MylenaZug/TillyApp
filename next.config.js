@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import withPWA from "@ducanh2912/next-pwa";
+import withSerwistInit from "@serwist/next";
 
 const { version } = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
@@ -9,13 +9,12 @@ const nextConfig = {
   env: { NEXT_PUBLIC_APP_VERSION: version },
 };
 
-export default withPWA({
-  dest: "public",
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
+const withSerwist = withSerwistInit({
+  swSrc: "app/sw.ts",
+  swDest: "public/sw.js",
+  cacheOnNavigation: true,
   reloadOnOnline: true,
-  workboxOptions: {
-    // Sync-Eintraege laufen ueber die eigene Storage-Engine, nicht ueber den SW-Cache.
-    exclude: [/^\/api\//],
-  },
-})(nextConfig);
+  exclude: [/^\/api\//],
+});
+
+export default withSerwist(nextConfig);

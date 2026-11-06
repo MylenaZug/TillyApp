@@ -1,4 +1,4 @@
-FROM node:20-bookworm
+FROM node:24.22.2-bookworm
 
 # build-essential + python3 needed to compile better-sqlite3's native addon
 RUN apt-get update && apt-get install -y --no-install-recommends \
